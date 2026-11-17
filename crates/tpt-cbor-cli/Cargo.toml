@@ -1,0 +1,24 @@
+[package]
+name = "tpt-cbor-cli"
+description = "Command-line tool for tpt-cbor: hex, diagnostic notation, JSON and validation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["cbor", "rfc8949", "cli", "json", "hex"]
+categories = ["command-line-utilities", "encoding"]
+# Not for crates.io. Install from the repository with `cargo install --path`.
+publish = false
+
+[[bin]]
+name = "tpt-cbor"
+path = "src/main.rs"
+
+[dependencies]
+tpt-cbor = { version = "0.1.0", path = "../tpt-cbor", features = ["std"] }
+
+[package.metadata.docs.rs]
+all-features = true
