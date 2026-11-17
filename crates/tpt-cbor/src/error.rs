@@ -43,6 +43,9 @@ pub enum DecodeError {
     /// A container declares more elements or pairs than
     /// `Config::max_items` allows.
     LimitExceeded,
+    /// A derived struct with `deny_unknown_fields` found a key it does not
+    /// know.
+    UnknownField,
 }
 
 impl fmt::Display for DecodeError {
@@ -63,12 +66,34 @@ impl fmt::Display for DecodeError {
             Self::MissingField => "required field missing",
             Self::UnknownVariant => "unknown enum variant",
             Self::LimitExceeded => "container length exceeds the configured limit",
+            Self::UnknownField => "unknown field",
         };
         f.write_str(msg)
     }
 }
 
 impl core::error::Error for DecodeError {}
+
+/// A [`DecodeError`] with the byte offset where decoding stopped.
+///
+/// The offset is the first byte the decoder could not accept, or the end of
+/// the header or key that failed a check. It is not always the exact start of
+/// the faulty item (see [`crate::Decoder::position`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Located {
+    /// The error that stopped decoding.
+    pub error: DecodeError,
+    /// Byte offset in the input where decoding stopped.
+    pub offset: usize,
+}
+
+impl fmt::Display for Located {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} at byte {}", self.error, self.offset)
+    }
+}
+
+impl core::error::Error for Located {}
 
 /// Errors produced while encoding CBOR.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

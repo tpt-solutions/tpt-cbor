@@ -57,7 +57,13 @@ mod decode;
 mod encode;
 mod error;
 mod float;
+mod helpers;
+mod seq;
 
+#[cfg(feature = "alloc")]
+mod bytebuf;
+#[cfg(feature = "alloc")]
+mod owned;
 #[cfg(feature = "alloc")]
 mod value;
 
@@ -69,8 +75,16 @@ mod proofs;
 
 pub use decode::{Config, Decode, Decoder, Kind};
 pub use encode::{Encode, Encoder, Sink};
-pub use error::{DecodeError, EncodeError};
+pub use error::{DecodeError, EncodeError, Located};
+pub use helpers::{is_canonical, validate};
+pub use seq::{sequence, sequence_with_config, Sequence};
 
+#[cfg(feature = "alloc")]
+pub use bytebuf::ByteBuf;
+#[cfg(feature = "alloc")]
+pub use helpers::canonicalize;
+#[cfg(feature = "alloc")]
+pub use owned::OwnedValue;
 #[cfg(feature = "alloc")]
 pub use value::Value;
 
@@ -78,7 +92,24 @@ pub use value::Value;
 pub use encode::IoSink;
 
 #[cfg(feature = "std")]
-pub use io::{read_to_buffer, to_writer};
+pub use io::{from_reader, read_to_buffer, to_writer, ReadError};
+
+/// Items most users need, in one import: `use tpt_cbor::prelude::*;`.
+pub mod prelude {
+    pub use crate::{
+        from_slice, Config, Decode, DecodeError, Decoder, Encode, EncodeError, Encoder, Located,
+    };
+
+    #[cfg(feature = "alloc")]
+    pub use crate::{cbor, to_vec, ByteBuf, OwnedValue, Value};
+}
+
+/// Re-exports used by the exported macros. Not part of the public API.
+#[cfg(feature = "alloc")]
+#[doc(hidden)]
+pub mod __private {
+    pub use alloc::vec;
+}
 
 #[cfg(feature = "derive")]
 pub use tpt_cbor_derive::{Decode, Encode};
@@ -122,6 +153,26 @@ pub fn from_slice_with_config<'a, T: Decode<'a>>(
     let value = T::decode(&mut decoder)?;
     decoder.finish()?;
     Ok(value)
+}
+
+/// Like [`from_slice`], but on failure also reports the byte offset where
+/// decoding stopped.
+pub fn from_slice_located<'a, T: Decode<'a>>(input: &'a [u8]) -> Result<T, Located> {
+    from_slice_located_with_config(input, Config::default())
+}
+
+/// Like [`from_slice_with_config`], but on failure also reports the byte
+/// offset where decoding stopped.
+pub fn from_slice_located_with_config<'a, T: Decode<'a>>(
+    input: &'a [u8],
+    config: Config,
+) -> Result<T, Located> {
+    let mut decoder = Decoder::with_config(input, config);
+    let result = T::decode(&mut decoder).and_then(|value| decoder.finish().map(|()| value));
+    result.map_err(|error| Located {
+        error,
+        offset: decoder.position(),
+    })
 }
 
 /// Compiles and runs the README examples as doctests. Not rendered in the API docs.

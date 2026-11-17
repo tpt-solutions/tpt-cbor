@@ -1,6 +1,7 @@
 //! Dynamically typed CBOR values.
 
 use alloc::vec::Vec;
+use core::fmt::{self, Write as _};
 
 use crate::decode::{Decode, Decoder, Kind, PREALLOC_LIMIT};
 use crate::encode::Encoder;
@@ -221,4 +222,202 @@ impl<'a> Decode<'a> for Value<'a> {
             }
         }
     }
+}
+
+/// Shared `Null` returned by indexing when a key or position is absent.
+static NULL: Value<'static> = Value::Null;
+
+impl<'a> core::ops::Index<&str> for Value<'a> {
+    type Output = Value<'a>;
+
+    /// Returns the value for a text key, or `null` if this is not a map or the
+    /// key is absent. Never panics.
+    fn index(&self, key: &str) -> &Value<'a> {
+        self.get_text(key).unwrap_or(&NULL)
+    }
+}
+
+impl<'a> core::ops::Index<usize> for Value<'a> {
+    type Output = Value<'a>;
+
+    /// Returns the item at `index`, or `null` if this is not an array or the
+    /// index is out of range. Never panics.
+    fn index(&self, index: usize) -> &Value<'a> {
+        self.as_array()
+            .and_then(|items| items.get(index))
+            .unwrap_or(&NULL)
+    }
+}
+
+impl From<i64> for Value<'_> {
+    fn from(v: i64) -> Self {
+        Value::Integer(v)
+    }
+}
+
+macro_rules! impl_from_small_int {
+    ($($t:ty),*) => {$(
+        impl From<$t> for Value<'_> {
+            fn from(v: $t) -> Self {
+                Value::Integer(i64::from(v))
+            }
+        }
+    )*};
+}
+impl_from_small_int!(i8, i16, i32, u8, u16, u32);
+
+impl From<f64> for Value<'_> {
+    fn from(v: f64) -> Self {
+        Value::Float(v)
+    }
+}
+
+impl From<f32> for Value<'_> {
+    fn from(v: f32) -> Self {
+        Value::Float(f64::from(v))
+    }
+}
+
+impl From<bool> for Value<'_> {
+    fn from(v: bool) -> Self {
+        Value::Bool(v)
+    }
+}
+
+impl<'a> From<&'a str> for Value<'a> {
+    fn from(v: &'a str) -> Self {
+        Value::Text(v)
+    }
+}
+
+impl<'a> From<&'a [u8]> for Value<'a> {
+    fn from(v: &'a [u8]) -> Self {
+        Value::Bytes(v)
+    }
+}
+
+impl<'a> From<Vec<Value<'a>>> for Value<'a> {
+    fn from(items: Vec<Value<'a>>) -> Self {
+        Value::Array(items)
+    }
+}
+
+impl<'a, T: Into<Value<'a>>> From<Option<T>> for Value<'a> {
+    fn from(v: Option<T>) -> Self {
+        match v {
+            Some(inner) => inner.into(),
+            None => Value::Null,
+        }
+    }
+}
+
+/// Writes text in diagnostic notation: quoted, with `"` and `\` escaped and
+/// control characters written as `\uXXXX`.
+pub(crate) fn write_text(f: &mut fmt::Formatter<'_>, text: &str) -> fmt::Result {
+    f.write_str("\"")?;
+    for c in text.chars() {
+        match c {
+            '"' => f.write_str("\\\"")?,
+            '\\' => f.write_str("\\\\")?,
+            c if u32::from(c) < 0x20 || c == '\u{7f}' => write!(f, "\\u{:04x}", u32::from(c))?,
+            c => f.write_char(c)?,
+        }
+    }
+    f.write_str("\"")
+}
+
+/// Writes a float in diagnostic notation: `NaN`, `Infinity`, `-Infinity`, or
+/// the shortest round-trip form.
+pub(crate) fn write_float(f: &mut fmt::Formatter<'_>, x: f64) -> fmt::Result {
+    if x.is_nan() {
+        f.write_str("NaN")
+    } else if x == f64::INFINITY {
+        f.write_str("Infinity")
+    } else if x == f64::NEG_INFINITY {
+        f.write_str("-Infinity")
+    } else {
+        write!(f, "{x:?}")
+    }
+}
+
+/// Diagnostic notation (RFC 8949 §8). Byte strings are written as `h'..'`,
+/// maps as `{k: v}`, and text is quoted and escaped.
+impl fmt::Display for Value<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Integer(i) => write!(f, "{i}"),
+            Value::Bytes(b) => {
+                f.write_str("h'")?;
+                for byte in *b {
+                    write!(f, "{byte:02x}")?;
+                }
+                f.write_str("'")
+            }
+            Value::Text(t) => write_text(f, t),
+            Value::Float(x) => write_float(f, *x),
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::Null => f.write_str("null"),
+            Value::Array(items) => {
+                f.write_str("[")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                f.write_str("]")
+            }
+            Value::Map(pairs) => {
+                f.write_str("{")?;
+                for (i, (key, value)) in pairs.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{key}: {value}")?;
+                }
+                f.write_str("}")
+            }
+        }
+    }
+}
+
+/// Builds a [`Value`] from a JSON-like literal.
+///
+/// Arrays use `[...]`, maps use `{ key: value, ... }`, and `null`, `true`
+/// and `false` are literals. Any other element must be a single token tree,
+/// such as a literal, an identifier, or a parenthesised expression. Write a
+/// negative number in parentheses, as in `(-1)`. Use [`Value::from`] for a
+/// more complex expression.
+///
+/// ```
+/// use tpt_cbor::{cbor, to_vec};
+///
+/// let value = cbor!({ "a": 1, "b": [2, 3] });
+/// assert_eq!(
+///     to_vec(&value).unwrap(),
+///     [0xa2, 0x61, 0x61, 0x01, 0x61, 0x62, 0x82, 0x02, 0x03]
+/// );
+/// ```
+#[macro_export]
+macro_rules! cbor {
+    (null) => {
+        $crate::Value::Null
+    };
+    (true) => {
+        $crate::Value::Bool(true)
+    };
+    (false) => {
+        $crate::Value::Bool(false)
+    };
+    ([ $($elem:tt),* $(,)? ]) => {
+        $crate::Value::Array($crate::__private::vec![ $( $crate::cbor!($elem) ),* ])
+    };
+    ({ $($key:tt : $val:tt),* $(,)? }) => {
+        $crate::Value::Map($crate::__private::vec![
+            $( ( $crate::cbor!($key), $crate::cbor!($val) ) ),*
+        ])
+    };
+    ($other:expr) => {
+        $crate::Value::from($other)
+    };
 }

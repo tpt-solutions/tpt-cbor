@@ -111,8 +111,9 @@ enum Arg {
 
 /// Zero-copy decoder over a borrowed byte slice.
 ///
-/// Errors leave the decoder in an unspecified position. Discard the decoder
-/// after an error rather than resuming it.
+/// After an error, the decoder must be discarded rather than resumed.
+/// [`Decoder::position`] still reports where decoding stopped, which is used
+/// for error offsets (see [`crate::Located`]).
 pub struct Decoder<'a> {
     input: &'a [u8],
     offset: usize,
@@ -159,6 +160,10 @@ impl<'a> Decoder<'a> {
     }
 
     /// Byte offset of the next unread byte.
+    ///
+    /// After a failed decode this is where decoding stopped: the first byte
+    /// that could not be accepted, or the end of a header or key whose check
+    /// failed. It is not always the exact first byte of the faulty item.
     pub fn position(&self) -> usize {
         self.offset
     }
@@ -568,6 +573,37 @@ impl<'a> Decode<'a> for bool {
     }
 }
 
+impl<'a> Decode<'a> for usize {
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
+        let v = decoder.decode_u64()?;
+        usize::try_from(v).map_err(|_| DecodeError::Overflow)
+    }
+}
+
+impl<'a> Decode<'a> for isize {
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
+        let v = decoder.decode_i64()?;
+        isize::try_from(v).map_err(|_| DecodeError::Overflow)
+    }
+}
+
+impl<'a> Decode<'a> for char {
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
+        let text = decoder.decode_str()?;
+        let mut chars = text.chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) => Ok(c),
+            _ => Err(DecodeError::Malformed),
+        }
+    }
+}
+
+impl<'a> Decode<'a> for () {
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
+        decoder.decode_null()
+    }
+}
+
 impl<'a> Decode<'a> for f64 {
     fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
         decoder.decode_f64()
@@ -596,6 +632,79 @@ impl<'a> Decode<'a> for &'a str {
 impl<'a> Decode<'a> for &'a [u8] {
     fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
         decoder.decode_bytes()
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a> Decode<'a> for alloc::borrow::Cow<'a, str> {
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
+        decoder.decode_str().map(alloc::borrow::Cow::Borrowed)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a> Decode<'a> for alloc::borrow::Cow<'a, [u8]> {
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
+        decoder.decode_bytes().map(alloc::borrow::Cow::Borrowed)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: Decode<'a>> Decode<'a> for alloc::boxed::Box<T> {
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
+        T::decode(decoder).map(alloc::boxed::Box::new)
+    }
+}
+
+/// Decodes a map's pairs and hands each one to `insert`. `insert` returns
+/// `false` for a key it already holds, which is reported as a duplicate.
+/// Strict mode also checks key order.
+#[cfg(feature = "alloc")]
+fn decode_pairs<'a, K, V>(
+    decoder: &mut Decoder<'a>,
+    mut insert: impl FnMut(K, V) -> bool,
+) -> Result<(), DecodeError>
+where
+    K: Decode<'a>,
+    V: Decode<'a>,
+{
+    let n = decoder.decode_map_len()?;
+    decoder.enter_container()?;
+    let mut prev: Option<(usize, usize)> = None;
+    for _ in 0..n {
+        let start = decoder.position();
+        let key = K::decode(decoder)?;
+        let span = (start, decoder.position());
+        decoder.check_key_order(prev, span)?;
+        prev = Some(span);
+        let value = V::decode(decoder)?;
+        if !insert(key, value) {
+            return Err(DecodeError::DuplicateKey);
+        }
+    }
+    decoder.leave_container();
+    Ok(())
+}
+
+#[cfg(feature = "alloc")]
+impl<'a, K: Decode<'a> + Ord, V: Decode<'a>> Decode<'a> for alloc::collections::BTreeMap<K, V> {
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
+        let mut out = alloc::collections::BTreeMap::new();
+        decode_pairs(decoder, |k, v| out.insert(k, v).is_none())?;
+        Ok(out)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a, K, V> Decode<'a> for std::collections::HashMap<K, V>
+where
+    K: Decode<'a> + Eq + std::hash::Hash,
+    V: Decode<'a>,
+{
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
+        let mut out = std::collections::HashMap::new();
+        decode_pairs(decoder, |k, v| out.insert(k, v).is_none())?;
+        Ok(out)
     }
 }
 
@@ -671,3 +780,8 @@ macro_rules! impl_decode_tuple {
 }
 impl_decode_tuple!(2; A, B);
 impl_decode_tuple!(3; A, B, C);
+impl_decode_tuple!(4; A, B, C, D);
+impl_decode_tuple!(5; A, B, C, D, E);
+impl_decode_tuple!(6; A, B, C, D, E, F);
+impl_decode_tuple!(7; A, B, C, D, E, F, G);
+impl_decode_tuple!(8; A, B, C, D, E, F, G, H);

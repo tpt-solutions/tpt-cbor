@@ -213,6 +213,72 @@ impl Encode for bool {
     }
 }
 
+impl Encode for usize {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
+        encoder.encode_u64(*self as u64)
+    }
+}
+
+impl Encode for isize {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
+        encoder.encode_i64(*self as i64)
+    }
+}
+
+impl Encode for char {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
+        let mut buf = [0u8; 4];
+        encoder.encode_str(self.encode_utf8(&mut buf))
+    }
+}
+
+impl Encode for () {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
+        encoder.encode_null()
+    }
+}
+
+/// Encodes a map from `pairs`, sorting the entries by their encoded keys
+/// (RFC 8949 §4.2.1). Two distinct Rust keys that encode to the same bytes
+/// are a [`EncodeError::DuplicateKey`].
+#[cfg(feature = "alloc")]
+pub(crate) fn encode_pairs<'p, K, V, I>(
+    pairs: I,
+    len: usize,
+    encoder: &mut Encoder<'_>,
+) -> Result<(), EncodeError>
+where
+    K: Encode + 'p,
+    V: Encode + 'p,
+    I: Iterator<Item = (&'p K, &'p V)>,
+{
+    encoder.enter_container()?;
+    let mut keyed: alloc::vec::Vec<(alloc::vec::Vec<u8>, &V)> = alloc::vec::Vec::with_capacity(len);
+    for (key, value) in pairs {
+        let mut key_bytes = alloc::vec::Vec::new();
+        {
+            let mut key_encoder = encoder.nested(&mut key_bytes);
+            key.encode(&mut key_encoder)?;
+        }
+        keyed.push((key_bytes, value));
+    }
+    keyed.sort_by(|a, b| a.0.cmp(&b.0));
+    for window in keyed.windows(2) {
+        if let [a, b] = window {
+            if a.0 == b.0 {
+                return Err(EncodeError::DuplicateKey);
+            }
+        }
+    }
+    encoder.encode_map_header(keyed.len())?;
+    for (key_bytes, value) in &keyed {
+        encoder.write_raw(key_bytes)?;
+        value.encode(encoder)?;
+    }
+    encoder.leave_container();
+    Ok(())
+}
+
 macro_rules! impl_encode_unsigned {
     ($($t:ty),*) => {$(
         impl Encode for $t {
@@ -267,6 +333,40 @@ impl Encode for &str {
 impl Encode for &[u8] {
     fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
         encoder.encode_bytes(self)
+    }
+}
+
+impl Encode for [u8] {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
+        encoder.encode_bytes(self)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T: Encode + ?Sized> Encode for alloc::boxed::Box<T> {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
+        T::encode(self, encoder)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T: alloc::borrow::ToOwned + Encode + ?Sized> Encode for alloc::borrow::Cow<'_, T> {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
+        T::encode(self, encoder)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<K: Encode, V: Encode> Encode for alloc::collections::BTreeMap<K, V> {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
+        encode_pairs(self.iter(), self.len(), encoder)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<K: Encode, V: Encode, S> Encode for std::collections::HashMap<K, V, S> {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError> {
+        encode_pairs(self.iter(), self.len(), encoder)
     }
 }
 
@@ -326,3 +426,8 @@ macro_rules! impl_encode_tuple {
 }
 impl_encode_tuple!(2; 0: A, 1: B);
 impl_encode_tuple!(3; 0: A, 1: B, 2: C);
+impl_encode_tuple!(4; 0: A, 1: B, 2: C, 3: D);
+impl_encode_tuple!(5; 0: A, 1: B, 2: C, 3: D, 4: E);
+impl_encode_tuple!(6; 0: A, 1: B, 2: C, 3: D, 4: E, 5: F);
+impl_encode_tuple!(7; 0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G);
+impl_encode_tuple!(8; 0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H);
