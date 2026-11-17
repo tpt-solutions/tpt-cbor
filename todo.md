@@ -92,11 +92,11 @@ Owner: TPT Solutions · License: MIT OR Apache-2.0 · Policy: zero dependencies 
 - [x] `derive` feature re-export from `tpt-cbor` — opt-in; default build stays dependency-free
 - [ ] Compile-fail tests (trybuild or equivalent permissively licensed tool) — deferred: not added to keep the dev-dependency graph small; macro errors are reported via syn::Error
 - [x] Round-trip tests for derived types
-- [ ] Docs and examples — crate-level format docs written; examples not yet added
+- [x] Docs and examples — format docs, `value_roundtrip` and `derive_config` examples
 
 ## Phase 3 — Formal Verification (Kani, narrowed)
 Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1; Kani only proves what they can't.
-- [ ] Install Kani; add `kani` cfg harness module — harness module written (`src/proofs.rs`). **Blocked**: Kani install was denied by the permission check; needs your approval to run `cargo install kani-verifier` and `cargo kani setup`
+- [ ] Install Kani; add `kani` cfg harness module — harnesses written (`src/proofs.rs`). **Blocked**: Kani's installer needs Unix (no native Windows support). The WSL route was denied by the permission check, so it is not installed. Needs a Linux machine/CI runner or an approved WSL install; see VERIFICATION.md
 - [x] `cfg(kani)`: shrink max depth to 2–3; stub `core::str::from_utf8` with `kani::any` — written, not run
 - [x] Harness: header parse never panics for any bytes — written, not run
 - [x] Harness: argument read + offset/length arithmetic never overflows or reads out of bounds — partly covered (unsigned encoding minimal/round-trip); written, not run
@@ -122,7 +122,7 @@ Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1
 - [ ] Verify MSRV and `no_std` builds in CI — MSRV and no_std verified locally; CI config written, not yet run
 - [ ] API review (naming, error types, semver surface) — partial. Open points: `Vec<u8>` encodes as an array (documented); `DecodeError`/`EncodeError` are `non_exhaustive`; `Config` fields are public
 - [x] `CHANGELOG.md`
-- [ ] Final README/docs polish; docs.rs metadata — docs.rs metadata set; README polish pending
+- [ ] Final README/docs polish; docs.rs metadata — docs.rs metadata set; README updated for derive and verification status
 - [ ] `cargo publish --dry-run` for each crate — done for `tpt-cbor` (no upload). `tpt-cbor-derive` is a placeholder and must not be published yet
 - [ ] Publish `tpt-cbor`, then `tpt-cbor-derive`
 - [ ] Tag `v1.0.0` and create release notes

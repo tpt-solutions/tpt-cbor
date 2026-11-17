@@ -2,8 +2,12 @@
 
 Status: **proof harnesses written, not yet run.**
 
-Kani is not installed in the development environment. The install was not
-completed. Once it is available, run:
+Kani is not installed. Kani's installer only builds on Unix. A native Windows
+install fails with platform errors (`std::os::unix` is not available). Installing
+it in WSL was also attempted, and that attempt was blocked by the permission
+check, so no Linux install was done. To finish, either approve the WSL install
+(rustup, `cargo install kani-verifier --locked`, `cargo kani setup`) or run the
+proofs on a Linux machine or CI runner. Then run:
 
     cargo kani -p tpt-cbor
 

@@ -34,9 +34,36 @@ assert_eq!(decoded, value);
 |---------|---------|--------|
 | `alloc` | yes     | `Value`, `Vec`/`String` codecs, `to_vec`. |
 | `std`   | no      | `std::io` adapters: `to_writer`, `read_to_buffer`. Implies `alloc`. |
+| `derive` | no     | `#[derive(Encode, Decode)]`. Pulls in `tpt-cbor-derive` and its build-time `syn`/`quote` dependencies. |
 
 With `default-features = false` the crate is `#![no_std]` and needs no allocator.
 Only borrowed decoding is available in that mode.
+
+## Derive macros
+
+With the `derive` feature, structs and enums can be encoded directly:
+
+```rust,ignore
+use tpt_cbor::{Decode, Encode};
+
+#[derive(Encode, Decode)]
+struct Settings {
+    name: String,
+    #[cbor(rename = "max-retries")]
+    max_retries: u8,
+}
+```
+
+Named structs become canonical maps keyed by field name. Enums are externally
+tagged: a unit variant is its name as text, and other variants are
+`{"Name": payload}`. See the `tpt-cbor-derive` crate docs for the full format and
+the `rename`, `skip` and `default` attributes.
+
+## Verification
+
+Proof harnesses for the integer, float and skip paths are written
+(`crates/tpt-cbor/src/proofs.rs`) but have **not been run yet**. Kani is not
+installed here. See [`VERIFICATION.md`](VERIFICATION.md) for status.
 
 ## Minimum supported Rust version
 
@@ -47,7 +74,7 @@ Rust **1.85**. The toolchain is pinned in `rust-toolchain.toml`.
 | Crate | Purpose |
 |-------|---------|
 | `crates/tpt-cbor` | The core codec. Zero dependencies. |
-| `crates/tpt-cbor-derive` | Derive macros. Placeholder until Phase 2 of `todo.md`. |
+| `crates/tpt-cbor-derive` | `Encode` and `Decode` derive macros (opt-in `derive` feature). |
 | `fuzz/` | `cargo-fuzz` harness. Outside the workspace and never published. |
 
 Design notes are in [`spec.txt`](spec.txt). Work tracking is in [`todo.md`](todo.md).
@@ -59,6 +86,8 @@ cargo test --workspace                          # default features
 cargo test -p tpt-cbor --features std           # std I/O adapters
 cargo test -p tpt-cbor --no-default-features    # no_std, no alloc
 cargo bench -p tpt-cbor                         # coarse throughput numbers
+cargo run -p tpt-cbor --example value_roundtrip
+cargo run -p tpt-cbor-derive --example derive_config
 ```
 
 ## License
