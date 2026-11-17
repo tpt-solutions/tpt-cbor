@@ -7,10 +7,15 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-readme = "../../README.md"
+readme = "README.md"
+keywords = ["cbor", "rfc8949", "serialization", "derive", "proc-macro"]
+categories = ["development-tools::procedural-macro-helpers", "encoding"]
 
 [lib]
 proc-macro = true
+
+[package.metadata.docs.rs]
+all-features = true
 
 # Build-time only. These are never linked into tpt-cbor itself, and are only
 # pulled into a build when the `derive` feature of tpt-cbor is enabled.
@@ -21,3 +26,5 @@ syn = "2"
 
 [dev-dependencies]
 tpt-cbor = { version = "0.1.0", path = "../tpt-cbor", features = ["derive"] }
+# Dev-only compile-fail tests (MIT OR Apache-2.0). Not in the core crate's graph.
+trybuild = "1"

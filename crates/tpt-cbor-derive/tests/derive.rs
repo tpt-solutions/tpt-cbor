@@ -232,3 +232,41 @@ fn nested_derived_types() {
     let bytes = to_vec(&v).unwrap();
     assert_eq!(from_slice::<Nested<'_>>(&bytes).unwrap(), v);
 }
+
+/// A type with no codec impls. Used as a type parameter that only a skipped
+/// field mentions, so the derive must not require `Encode` or `Decode` for it.
+#[derive(Debug, PartialEq)]
+struct NoCodec;
+
+#[derive(Debug, PartialEq, Encode, Decode)]
+struct Tagged<T> {
+    id: u8,
+    #[cbor(skip)]
+    marker: std::marker::PhantomData<T>,
+}
+
+#[test]
+fn type_parameter_used_only_by_skipped_field_needs_no_codec_bound() {
+    let v: Tagged<NoCodec> = Tagged {
+        id: 7,
+        marker: std::marker::PhantomData,
+    };
+    let bytes = to_vec(&v).unwrap();
+    assert_eq!(bytes, hex("a1 62 69 64 07"));
+    let back: Tagged<NoCodec> = from_slice(&bytes).unwrap();
+    assert_eq!(back.id, 7);
+}
+
+#[test]
+fn type_parameter_used_by_live_field_is_still_bounded() {
+    // `Vec<u8>` implements Encode and Decode, so this compiles and round-trips.
+    #[derive(Debug, PartialEq, Encode, Decode)]
+    struct Wrapper<T> {
+        items: Vec<T>,
+    }
+    let v = Wrapper {
+        items: vec![1u8, 2],
+    };
+    let bytes = to_vec(&v).unwrap();
+    assert_eq!(from_slice::<Wrapper<u8>>(&bytes).unwrap(), v);
+}

@@ -1,0 +1,5 @@
+error: tpt-cbor supports at most one lifetime parameter on derived types
+ --> tests/ui/two_lifetimes.rs:4:8
+  |
+4 | struct S<'a, 'b> {
+  |        ^

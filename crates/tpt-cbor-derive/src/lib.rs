@@ -35,11 +35,11 @@
 use std::collections::BTreeSet;
 
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{format_ident, quote};
+use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
-    parse_macro_input, parse_quote, Data, DeriveInput, Error, Fields, Generics, Ident, Index,
-    LitStr, Member, Type,
+    parse_macro_input, parse_quote, Data, DataEnum, DeriveInput, Error, Fields, Generics, Ident,
+    Index, LitStr, Member, Type,
 };
 
 /// Derives `tpt_cbor::Encode`. See the crate documentation for the format.
@@ -213,12 +213,81 @@ fn text_key_encoding(s: &str) -> Vec<u8> {
 // Generics
 // ---------------------------------------------------------------------------
 
-fn add_type_bounds(generics: &mut Generics, bound: &TokenStream2) {
-    let idents: Vec<Ident> = generics.type_params().map(|p| p.ident.clone()).collect();
+/// Adds `bound` for each type parameter that appears in one of `used_by`.
+///
+/// Parameters used only by skipped fields get no bound, because the derived
+/// code never encodes or decodes those fields.
+fn add_type_bounds(generics: &mut Generics, bound: &TokenStream2, used_by: &[Type]) {
+    let mut used = BTreeSet::new();
+    for ty in used_by {
+        collect_idents(ty.to_token_stream(), &mut used);
+    }
+    let idents: Vec<Ident> = generics
+        .type_params()
+        .map(|p| p.ident.clone())
+        .filter(|ident| used.contains(&ident.to_string()))
+        .collect();
     let where_clause = generics.make_where_clause();
     for ident in idents {
         where_clause.predicates.push(parse_quote!(#ident: #bound));
     }
+}
+
+/// Collects every identifier in `ts`, descending into delimited groups.
+fn collect_idents(ts: TokenStream2, out: &mut BTreeSet<String>) {
+    for tt in ts {
+        match tt {
+            TokenTree::Ident(ident) => {
+                out.insert(ident.to_string());
+            }
+            TokenTree::Group(group) => collect_idents(group.stream(), out),
+            TokenTree::Punct(_) | TokenTree::Literal(_) => {}
+        }
+    }
+}
+
+/// Types of the fields that the derived code encodes or decodes (all fields
+/// that are not `skip`), across every variant for enums.
+fn live_field_types(input: &DeriveInput) -> syn::Result<Vec<Type>> {
+    fn push_live(fields: &Fields, out: &mut Vec<Type>) -> syn::Result<()> {
+        for field in fields {
+            if !parse_attrs(&field.attrs)?.skip {
+                out.push(field.ty.clone());
+            }
+        }
+        Ok(())
+    }
+
+    let mut out = Vec::new();
+    match &input.data {
+        Data::Struct(s) => push_live(&s.fields, &mut out)?,
+        Data::Enum(e) => {
+            for variant in &e.variants {
+                push_live(&variant.fields, &mut out)?;
+            }
+        }
+        Data::Union(_) => {}
+    }
+    Ok(out)
+}
+
+/// Rejects two variants whose names collide after `rename`. Without this,
+/// the second arm of the generated `match` would be unreachable and the
+/// second variant could never be decoded.
+fn check_variant_names(e: &DataEnum) -> syn::Result<()> {
+    let mut seen = BTreeSet::new();
+    for variant in &e.variants {
+        let name = parse_attrs(&variant.attrs)?
+            .rename
+            .unwrap_or_else(|| variant.ident.to_string());
+        if !seen.insert(name.clone()) {
+            return Err(Error::new_spanned(
+                &variant.ident,
+                format!("duplicate variant name `{name}` (after `rename`)"),
+            ));
+        }
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -273,7 +342,11 @@ fn encode_stmts(body: &Body, refs: &dyn Fn(&Field) -> TokenStream2) -> TokenStre
 fn expand_encode(input: &DeriveInput) -> syn::Result<TokenStream2> {
     let name = &input.ident;
     let mut generics = input.generics.clone();
-    add_type_bounds(&mut generics, &quote!(::tpt_cbor::Encode));
+    add_type_bounds(
+        &mut generics,
+        &quote!(::tpt_cbor::Encode),
+        &live_field_types(input)?,
+    );
     let (impl_generics, _, where_clause) = generics.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
 
@@ -293,6 +366,7 @@ fn expand_encode(input: &DeriveInput) -> syn::Result<TokenStream2> {
             if e.variants.is_empty() {
                 quote!(match *self {})
             } else {
+                check_variant_names(e)?;
                 let mut arms = Vec::new();
                 for v in &e.variants {
                     let attrs = parse_attrs(&v.attrs)?;
@@ -483,7 +557,11 @@ fn expand_decode(input: &DeriveInput) -> syn::Result<TokenStream2> {
             ))
         }
     };
-    add_type_bounds(&mut generics, &quote!(::tpt_cbor::Decode<#de>));
+    add_type_bounds(
+        &mut generics,
+        &quote!(::tpt_cbor::Decode<#de>),
+        &live_field_types(input)?,
+    );
     let (impl_generics, _, where_clause) = generics.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
 
@@ -497,6 +575,7 @@ fn expand_decode(input: &DeriveInput) -> syn::Result<TokenStream2> {
             if e.variants.is_empty() {
                 quote!(Err(::tpt_cbor::DecodeError::UnsupportedType))
             } else {
+                check_variant_names(e)?;
                 let mut text_arms = Vec::new();
                 let mut map_arms = Vec::new();
                 for v in &e.variants {
@@ -565,7 +644,3 @@ fn expand_decode(input: &DeriveInput) -> syn::Result<TokenStream2> {
         }
     })
 }
-
-// Keep `Ident` in scope for the doc links above.
-#[allow(dead_code)]
-fn _assert_ident(_: &Ident) {}

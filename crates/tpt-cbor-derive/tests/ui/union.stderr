@@ -1,0 +1,5 @@
+error: tpt-cbor cannot derive Encode for unions
+ --> tests/ui/union.rs:4:7
+  |
+4 | union U {
+  |       ^

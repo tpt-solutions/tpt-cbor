@@ -1,0 +1,6 @@
+error: `skip` and `default` are not supported on variants
+ --> tests/ui/skip_on_variant.rs:5:5
+  |
+5 | /     #[cbor(skip)]
+6 | |     A,
+  | |_____^
