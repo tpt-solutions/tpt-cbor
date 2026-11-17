@@ -15,7 +15,7 @@ Owner: TPT Solutions · License: MIT OR Apache-2.0 · Policy: zero dependencies 
 
 ## Phase 0 — Project Setup
 - [x] `git init`, add `.gitignore` (target/, Cargo.lock policy for libs) — repo already initialised; `.gitignore` covers target/, Cargo.lock, fuzz output
-- [x] Create Cargo workspace (`tpt-cbor`, `tpt-cbor-derive` placeholder)
+- [x] Create Cargo workspace (`tpt-cbor`, `tpt-cbor-derive`)
 - [x] Pin edition 2021 and choose/pin MSRV (`rust-version`) + `rust-toolchain.toml` — MSRV 1.85, pinned in `rust-toolchain.toml`
 - [x] Add `LICENSE-MIT` (copyright TPT Solutions)
 - [x] Add `LICENSE-APACHE` (Apache-2.0 text, TPT Solutions) — verbatim Apache-2.0 text
@@ -96,8 +96,8 @@ Owner: TPT Solutions · License: MIT OR Apache-2.0 · Policy: zero dependencies 
 
 ## Phase 3 — Formal Verification (Kani, narrowed)
 Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1; Kani only proves what they can't.
-- [ ] Install Kani; add `kani` cfg harness module — harnesses written (`src/proofs.rs`). **Blocked**: Kani's installer needs Unix (no native Windows support). The WSL route was denied by the permission check, so it is not installed. Needs a Linux machine/CI runner or an approved WSL install; see VERIFICATION.md
-- [x] `cfg(kani)`: shrink max depth to 2–3; stub `core::str::from_utf8` with `kani::any` — written, not run
+- [ ] Install Kani; add `kani` cfg harness module — harnesses written (`src/proofs.rs`). Also updated for the new `Config::max_items` field. **Blocked**: Kani's installer needs Unix (no native Windows support). The WSL route was denied by the permission check, so it is not installed. Needs a Linux machine/CI runner or an approved WSL install; see VERIFICATION.md
+- [ ] `cfg(kani)`: shrink max depth to 2–3; stub `core::str::from_utf8` with `kani::any` — depth shrink done in `skip_item_bounded` only; the `from_utf8` stub is **not implemented**
 - [x] Harness: header parse never panics for any bytes — written, not run
 - [x] Harness: argument read + offset/length arithmetic never overflows or reads out of bounds — partly covered (unsigned encoding minimal/round-trip); written, not run
 - [x] Harness: `skip_item` never panics, never reads out of bounds (8–16 byte symbolic input, per-harness `#[kani::unwind]`) — written, not run
@@ -123,7 +123,7 @@ Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1
 - [ ] API review (naming, error types, semver surface) — partial. Open points: `Vec<u8>` encodes as an array (documented); `DecodeError`/`EncodeError` are `non_exhaustive`; `Config` fields are public
 - [x] `CHANGELOG.md`
 - [ ] Final README/docs polish; docs.rs metadata — docs.rs metadata set; README updated for derive and verification status
-- [ ] `cargo publish --dry-run` for each crate — done for `tpt-cbor` (no upload). `tpt-cbor-derive` is a placeholder and must not be published yet
+- [ ] `cargo publish --dry-run` for each crate — done for `tpt-cbor` (no upload). `tpt-cbor-derive` must be published after `tpt-cbor`, not before
 - [ ] Publish `tpt-cbor`, then `tpt-cbor-derive`
 - [ ] Tag `v1.0.0` and create release notes
 
@@ -131,3 +131,45 @@ Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1
 - [ ] Optional isolated `simd` feature for UTF-8 validation (only if benchmarks justify; separate unsafe audit)
 - [ ] Tag support and wider integer range (i128 / full CBOR int range)
 - [ ] Full incremental streaming decoder (owned data)
+
+## Phase 6 — Review follow-up: fix stale claims and bugs
+- [x] `todo.md` Phase 3: the "cfg(kani) shrink max depth / stub from_utf8" claim corrected (Phase 3 line updated: the from_utf8 stub is not implemented)
+- [x] Fix "placeholder" wording for the derive crate in `todo.md` and `CHANGELOG.md`; add derive entries to the changelog
+- [x] Add the `derive` feature to the feature table in `lib.rs`
+- [x] Make the README Quick start a real doctest — `crates/tpt-cbor/README.md` is compiled as doctests (feature `alloc`)
+- [x] Align `spec.txt` §3 (no_std default) and §7 (zero-alloc claim for derived structs) with reality
+- [x] Clean the duplicated `check_key_order` doc comment in `decode.rs`
+- [x] `check_key_order` span failure reports `Malformed`, not `UnexpectedEof`
+- [x] Cap `Vec::with_capacity` pre-allocation in `decode.rs` and `value.rs` (`PREALLOC_LIMIT` = 1024); hostile-header regression tests in `malformed.rs`
+- [ ] Add `Config` limits (`max_items` / `max_alloc`) enforced in container decode — **partial**: `max_items` done (`DecodeError::LimitExceeded`, default 2^20 per container). `max_alloc` **deferred** (recommendation: do not add yet). The allocation amplification it would guard against is already capped by the 1024-slot pre-allocation limit and the per-container `max_items`. Revisit if fuzzing or real workloads show total memory growing past input size
+- [x] Derive: remove leftover `_assert_ident`; duplicate variant names after `rename` are a compile error; type params used only in skipped fields get no bound; docs.rs metadata added (keywords and categories were already set)
+- [x] Make `[T; N]` Encode/Decode feature gating symmetric — **decided: accept the asymmetry.** `Decode` for `[T; N]` stays `alloc`-gated and `Encode` stays available without `alloc`. Stable Rust (1.85) cannot fill a `[T; N]` from fallible decodes without `unsafe` (forbidden) or a `Default` bound, and gating `Encode` would remove no_std array encoding. Documented in `decode.rs`
+- [x] Implement `Debug` for `Decoder` and `Encoder` (decoder omits input bytes)
+- [x] Finish and verify RFC 8949 Appendix A vectors — `crates/tpt-cbor/tests/rfc8949_appendix_a.rs` (12 tests, every row category). Caveat: the rows came from a tool-summarised fetch of the RFC, so re-check the hex against the RFC text
+- [x] trybuild compile-fail tests for the derive — `trybuild` added as a dev-dependency of `tpt-cbor-derive` only (core stays zero-dep). Six cases in `crates/tpt-cbor-derive/tests/ui/` cover duplicate variant names, duplicate keys, unions, two lifetimes, `skip` on a variant, and `rename` on a tuple field. trybuild is pinned to 1.0.100 because newer releases need rustc 1.88 (MSRV is 1.85). Licences checked by hand: every crate in its tree is MIT, or has an MIT alternative, or is Unicode-3.0. `cargo deny` is not installed, so it was not run
+- [ ] Run tests, clippy, fuzz (and Kani if installable); record real results in `VERIFICATION.md` — tests, clippy, rustfmt and no_std build are run and recorded. Fuzz (needs nightly + libFuzzer) and Kani (needs Linux/WSL) are **not run**
+
+## Phase 7 — Ergonomics
+- [ ] `Value`: `From` impls, `Index<&str>` / `Index<usize>`, `Display` as diagnostic notation (RFC 8949 §8), owned/`into_owned` support, `cbor!{}` literal macro
+- [ ] More codec impls: `usize`/`isize`, `char`, `()`, `Box<T>`, `Cow`, `&T`, `BTreeMap`, `HashMap` (std, sorted on encode), tuples up to 8
+- [ ] `ByteBuf` newtype and `#[tpt(bytes)]` derive attribute for byte-string fields
+- [ ] Derive attributes: `rename_all`, `deny_unknown_fields`, `transparent`, `skip_serializing_if`, `with`
+- [ ] Error byte offsets (keep `DecodeError` variants `Copy`)
+- [ ] Helpers: `from_reader`, `to_vec_canonical`, `is_canonical`, `canonicalize`, `validate`, RFC 8742 sequence iterator
+- [ ] `prelude` module
+
+## Phase 8 — CLI (`tpt-cbor-cli`)
+- [ ] New workspace crate with binary `tpt-cbor`
+- [ ] Subcommands: hex<->cbor, `diag`, `validate [--strict]`, `canon`, json<->cbor
+- [ ] stdin/stdout and file IO; exit codes and offsets on validation failure
+- [ ] Keep the `zero-deps` CI job scoped to `tpt-cbor`; document `cargo install` in the README
+
+## Phase 9 — Adoption tooling
+- [ ] CI: rustdoc `-D warnings`, `cargo semver-checks`, `cargo publish --dry-run` for all crates, miri, MSRV job, minimal-versions, coverage, Kani job, scheduled long fuzz with corpus cache, `derive` in the test matrix, deny covering `fuzz/`
+- [ ] Release automation (release-plz or cargo-release), tag-driven publish workflow, dependabot
+- [ ] `CONTRIBUTING.md`, issue/PR templates, `rustfmt.toml`, `clippy.toml`
+- [ ] Docs: README comparison vs ciborium/minicbor/serde_cbor, migration guide, cookbook, no_std/embedded guide
+- [ ] Examples: `no_std_embedded`, `canonical_sign`, `hostile_input`, CLI usage
+- [ ] Commit a fuzz seed corpus
+- [ ] Criterion benchmarks against ciborium and minicbor in a separate bench crate
+- [ ] Reserve crates.io names (`tpt-cbor`, `tpt-cbor-derive`, `tpt-cbor-cli`, `tpt-cbor-serde`)

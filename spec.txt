@@ -9,9 +9,10 @@ Panic-Free & Bounded: The parser will never panic on malformed input. Recursion 
 Zero-Copy First: Decoding borrows directly from the input slice. No intermediate allocations are made for strings, byte arrays, or map keys.
 3. Dependency & Feature Policy
 To maintain the "no dependencies" rule, the crate is structured with strict feature gates:
-default: Includes core and alloc. Enables heap-allocated Value types and standard encoding/decoding.
-std: Enables std::io::Read and std::io::Write streaming support. (Still zero external dependencies).
-no_std: The default state. Operates entirely in #![no_std] using only core and alloc.
+default: Enables alloc. Provides the heap-backed Value type, Vec/String codecs, and to_vec.
+std: Enables std::io::Read and std::io::Write streaming support. Implies alloc. (Still zero external dependencies).
+no_std: Built with default-features = false. Operates in #![no_std] using only core, with no allocator. Only borrowed and scalar decoding is available in this mode (Value, Vec, String and [T; N] decoding are not).
+derive: Opt-in. Adds the tpt-cbor-derive proc-macro crate and its build-time syn/quote dependencies. The default build stays dependency-free.
 Ecosystem Bridge: Integration with serde or other ecosystems is explicitly excluded from this crate. If needed, a separate tpt-cbor-serde bridge crate will be authored, keeping the core pure.
 4. Wire Format Specification (Strict Canonical CBOR)
 tpt-cbor implements RFC 8949 but enforces a Strict Canonical Subset for encoding to eliminate ambiguity and simplify the parser:
@@ -65,13 +66,14 @@ pub enum Value<'a> {
 6. Safety and Verification Strategy
 To ensure the library can be formally verified (e.g., via Kani or future agentic verification tools), the internal architecture is restricted:
 Bounded Recursion: The Decoder enforces a maximum nesting depth (default: 64, hard ceiling 256 regardless of configuration). If the depth exceeds the limit, it returns a DepthExceeded error. This guarantees the call stack cannot overflow. The encoder enforces the same default limit, so its output is always decodable.
+Bounded Containers: A declared array or map length must fit in the remaining input (otherwise UnexpectedEof). It must also not exceed Config::max_items (default 2^20 per container), otherwise LimitExceeded. Pre-allocation is capped at 1024 slots, so a header cannot force a large buffer before its elements are read. The max_items limit applies to each container, not to the document as a whole.
 Checked Arithmetic: All offset additions and length calculations use .checked_add() and .ok_or(DecodeError::Overflow). No unwrap() or expect() is used on arithmetic operations.
 Flat State Machine: Because indefinite-length items are banned, the parser does not need a complex stack to track nested indefinite contexts. The state machine remains flat and highly predictable.
 No Unsafe Code in Core: The core crate is #![forbid(unsafe_code)] and is 100% safe Rust. No unsafe code is planned for v1.0. Any future SIMD path would be an optional, isolated feature with its own unsafe audit (see todo.md, Later).
 7. Performance Characteristics
 Bitwise Header Parsing: The major type and additional information are extracted with shifts and masks. No branch-free guarantee is claimed; performance claims require benchmarks.
 UTF-8 Validation: Uses core::str::from_utf8. SIMD is not used in v1.0. An optional simd feature is deferred until benchmarks justify it (see todo.md, Later).
-Zero Allocation on Decode: Decoding into statically typed structs requires zero heap allocations, as all string/byte data is borrowed directly from the input buffer.
+Zero Allocation on Decode: Decoding borrowed and scalar types (&str, &[u8], integers, floats, bool, Option and tuples of these) does not allocate, and neither does skip_item validation. Derived structs and enums allocate only if they hold a String, Vec, Value or [T; N] field, because those decode types allocate. Structs built only from borrowed and scalar fields decode with no heap allocation.
 8. Implementation Roadmap
 Phase 1: Core Substrate: Implement Encoder, Decoder, Encode, Decode traits, and the Value enum. Enforce strict canonical encoding. (Zero dependencies).
 Phase 2: Derive Macros: Create a separate tpt-cbor-derive crate (which will depend on syn/quote) to auto-generate Encode/Decode implementations for structs and enums.
