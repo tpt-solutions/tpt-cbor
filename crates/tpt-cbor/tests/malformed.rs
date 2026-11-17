@@ -251,8 +251,8 @@ fn depth_limit_is_enforced() {
     );
     // Raising the limit allows more depth, up to the hard ceiling.
     let cfg = Config {
-        strict: true,
         max_depth: 1_000_000,
+        ..Config::strict()
     };
     assert!(from_slice_with_config::<Value<'_>>(&nested(256), cfg).is_ok());
     assert_eq!(
@@ -349,4 +349,76 @@ fn decoder_position_and_finish() {
     assert_eq!(d.decode_u64(), Ok(2));
     assert_eq!(d.position(), 3);
     assert_eq!(d.finish(), Ok(()));
+}
+
+#[test]
+fn container_length_above_max_items_is_rejected_before_elements() {
+    let cfg = Config {
+        max_items: 2,
+        ..Config::strict()
+    };
+    // Array of 3 nulls: the declared length exceeds the limit.
+    let array = hex("83 f6 f6 f6");
+    assert_eq!(
+        from_slice_with_config::<Value<'_>>(&array, cfg),
+        Err(DecodeError::LimitExceeded)
+    );
+    // Map of 3 pairs: same check on the pair count.
+    let map = hex("a3 61 61 00 61 62 00 61 63 00");
+    assert_eq!(
+        from_slice_with_config::<Value<'_>>(&map, cfg),
+        Err(DecodeError::LimitExceeded)
+    );
+    // At the limit, the same array decodes.
+    let two = hex("82 f6 f6");
+    assert!(from_slice_with_config::<Value<'_>>(&two, cfg).is_ok());
+}
+
+#[test]
+fn hostile_container_header_is_rejected_without_reading_elements() {
+    // Claims 2^32 - 1 elements but carries one byte. The input-length check
+    // runs first, so nothing is read or sized from the claim.
+    let input = hex("9a ff ff ff ff f6");
+    assert_eq!(
+        from_slice::<Value<'_>>(&input),
+        Err(DecodeError::UnexpectedEof)
+    );
+    assert_eq!(
+        from_slice::<Vec<Value<'_>>>(&input),
+        Err(DecodeError::UnexpectedEof)
+    );
+}
+
+#[test]
+fn large_declared_count_with_real_elements_decodes_fully() {
+    // 100k nulls are valid input. Capacity is capped up front (see
+    // PREALLOC_LIMIT), so this checks correctness of the growth path; it does
+    // not measure allocation.
+    let n: usize = 100_000;
+    let mut bytes = vec![0x9a];
+    bytes.extend_from_slice(&(n as u32).to_be_bytes());
+    bytes.extend(std::iter::repeat(0xf6).take(n));
+    let decoded = from_slice::<Vec<Value<'_>>>(&bytes).expect("valid");
+    assert_eq!(decoded.len(), n);
+}
+
+#[test]
+fn check_key_order_span_outside_input_is_malformed() {
+    let d = Decoder::new(&[0x61, 0x61]);
+    assert_eq!(
+        d.check_key_order(Some((0, 99)), (0, 2)),
+        Err(DecodeError::Malformed)
+    );
+    assert_eq!(
+        d.check_key_order(Some((0, 1)), (0, 99)),
+        Err(DecodeError::Malformed)
+    );
+}
+
+#[test]
+fn decoder_debug_omits_input_bytes() {
+    let d = Decoder::new(&[0xde, 0xad, 0xbe, 0xef]);
+    let text = format!("{d:?}");
+    assert!(text.contains("input_len: 4"), "{text}");
+    assert!(!text.contains("222, 173"), "{text}");
 }

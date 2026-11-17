@@ -30,6 +30,7 @@
 //! |---------|---------|--------|
 //! | `alloc` | yes     | `Value`, `Vec`/`String` codecs, `to_vec` |
 //! | `std`   | no      | `std::io` adapters (`to_writer`, `read_to_buffer`); implies `alloc` |
+//! | `derive` | no    | `#[derive(Encode, Decode)]`; adds build-time `syn`/`quote` dependencies |
 //!
 //! Without any features the crate is `#![no_std]` and needs no allocator.
 #![no_std]
@@ -90,6 +91,10 @@ pub const DEFAULT_MAX_DEPTH: usize = 64;
 /// which keeps recursion bounded regardless of user configuration.
 pub const MAX_DEPTH_LIMIT: usize = 256;
 
+/// Default maximum number of elements or pairs in one container
+/// (see [`Config::max_items`]).
+pub const DEFAULT_MAX_ITEMS: usize = 1 << 20;
+
 /// Encodes `value` into a new canonical byte vector.
 #[cfg(feature = "alloc")]
 pub fn to_vec<T: Encode + ?Sized>(value: &T) -> Result<alloc::vec::Vec<u8>, EncodeError> {
@@ -118,3 +123,8 @@ pub fn from_slice_with_config<'a, T: Decode<'a>>(
     decoder.finish()?;
     Ok(value)
 }
+
+/// Compiles and runs the README examples as doctests. Not rendered in the API docs.
+#[cfg(all(doctest, feature = "alloc"))]
+#[doc = include_str!("../README.md")]
+mod readme_doctests {}

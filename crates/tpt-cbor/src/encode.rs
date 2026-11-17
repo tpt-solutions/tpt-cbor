@@ -56,6 +56,16 @@ pub struct Encoder<'a> {
     max_depth: usize,
 }
 
+impl core::fmt::Debug for Encoder<'_> {
+    /// Shows nesting state only. The sink is a trait object and is omitted.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Encoder")
+            .field("depth", &self.depth)
+            .field("max_depth", &self.max_depth)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a> Encoder<'a> {
     /// Creates an encoder with the default maximum depth.
     pub fn new(sink: &'a mut dyn Sink) -> Self {

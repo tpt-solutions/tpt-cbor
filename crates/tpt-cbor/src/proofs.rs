@@ -31,6 +31,7 @@ fn skip_item_bounded() {
     let config = Config {
         strict: true,
         max_depth: 2,
+        max_items: crate::DEFAULT_MAX_ITEMS,
     };
     let mut d = Decoder::with_config(&input, config);
     let _ = d.skip_item();

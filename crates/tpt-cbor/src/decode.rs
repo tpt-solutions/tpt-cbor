@@ -4,10 +4,19 @@ use core::cmp::Ordering;
 
 use crate::error::DecodeError;
 use crate::float::{self, Canon};
-use crate::{DEFAULT_MAX_DEPTH, MAX_DEPTH_LIMIT};
+use crate::{DEFAULT_MAX_DEPTH, DEFAULT_MAX_ITEMS, MAX_DEPTH_LIMIT};
 
 #[cfg(feature = "alloc")]
 use alloc::{string::String, vec::Vec};
+
+/// Upper bound on the capacity reserved up front for a decoded container.
+///
+/// The declared length is checked against the remaining input, but one input
+/// byte can describe a container element that occupies many bytes in memory.
+/// Reserving at most this many slots keeps a hostile header from forcing a
+/// large allocation before any element has been decoded.
+#[cfg(feature = "alloc")]
+pub(crate) const PREALLOC_LIMIT: usize = 1024;
 
 // Major type numbers (initial byte >> 5).
 const MAJOR_UINT: u8 = 0;
@@ -35,22 +44,31 @@ pub struct Config {
     /// Maximum container nesting depth. Values above
     /// [`crate::MAX_DEPTH_LIMIT`] are clamped.
     pub max_depth: usize,
+    /// Maximum number of elements (array) or pairs (map) in any single
+    /// container. A declared length above this fails with
+    /// [`DecodeError::LimitExceeded`] before any element is read.
+    ///
+    /// This limits each container, not the total item count across a
+    /// document. Nesting is bounded separately by `max_depth`.
+    pub max_items: usize,
 }
 
 impl Config {
-    /// Strict mode with the default depth limit.
+    /// Strict mode with the default limits.
     pub const fn strict() -> Self {
         Self {
             strict: true,
             max_depth: DEFAULT_MAX_DEPTH,
+            max_items: DEFAULT_MAX_ITEMS,
         }
     }
 
-    /// Lenient mode with the default depth limit.
+    /// Lenient mode with the default limits.
     pub const fn lenient() -> Self {
         Self {
             strict: false,
             max_depth: DEFAULT_MAX_DEPTH,
+            max_items: DEFAULT_MAX_ITEMS,
         }
     }
 }
@@ -100,6 +118,19 @@ pub struct Decoder<'a> {
     offset: usize,
     depth: usize,
     config: Config,
+}
+
+impl core::fmt::Debug for Decoder<'_> {
+    /// Shows position, depth and configuration. The input bytes are omitted,
+    /// so large or sensitive payloads do not end up in logs.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Decoder")
+            .field("input_len", &self.input.len())
+            .field("offset", &self.offset)
+            .field("depth", &self.depth)
+            .field("config", &self.config)
+            .finish()
+    }
 }
 
 impl<'a> Decoder<'a> {
@@ -267,6 +298,9 @@ impl<'a> Decoder<'a> {
         if len > self.remaining() {
             return Err(DecodeError::UnexpectedEof);
         }
+        if len > self.config.max_items {
+            return Err(DecodeError::LimitExceeded);
+        }
         Ok(len)
     }
 
@@ -280,6 +314,9 @@ impl<'a> Decoder<'a> {
         let needed = len.checked_mul(2).ok_or(DecodeError::UnexpectedEof)?;
         if needed > self.remaining() {
             return Err(DecodeError::UnexpectedEof);
+        }
+        if len > self.config.max_items {
+            return Err(DecodeError::LimitExceeded);
         }
         Ok(len)
     }
@@ -351,13 +388,14 @@ impl<'a> Decoder<'a> {
         self.depth = self.depth.saturating_sub(1);
     }
 
-    /// Checks that map key `cur` follows `prev` in canonical order. Each range
-    /// is a byte span within the input. Only enforced in strict mode.
     /// Checks that a map key follows the previous key in canonical order.
     ///
     /// `prev` and `cur` are byte spans of the two encoded keys in the input,
     /// obtained from [`Decoder::position`]. Used by hand-written and derived
     /// map decoders. Only enforced in strict mode.
+    ///
+    /// A span outside the input is a caller error, not truncated data, so it
+    /// is reported as [`DecodeError::Malformed`].
     pub fn check_key_order(
         &self,
         prev: Option<(usize, usize)>,
@@ -370,8 +408,8 @@ impl<'a> Decoder<'a> {
             return Ok(());
         };
         let (cs, ce) = cur;
-        let a = self.input.get(ps..pe).ok_or(DecodeError::UnexpectedEof)?;
-        let b = self.input.get(cs..ce).ok_or(DecodeError::UnexpectedEof)?;
+        let a = self.input.get(ps..pe).ok_or(DecodeError::Malformed)?;
+        let b = self.input.get(cs..ce).ok_or(DecodeError::Malformed)?;
         // Slice Ord is lexicographic on bytes, with a shorter prefix sorting first.
         // That is exactly RFC 8949 §4.2.1 bytewise order.
         match a.cmp(b) {
@@ -573,7 +611,7 @@ impl<'a, T: Decode<'a>> Decode<'a> for Vec<T> {
     fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
         let n = decoder.decode_array_len()?;
         decoder.enter_container()?;
-        let mut out = Vec::with_capacity(n);
+        let mut out = Vec::with_capacity(n.min(PREALLOC_LIMIT));
         for _ in 0..n {
             out.push(T::decode(decoder)?);
         }
@@ -593,6 +631,10 @@ impl<'a, T: Decode<'a>> Decode<'a> for Option<T> {
     }
 }
 
+// Gated on `alloc` because the decode buffer is a `Vec`. Stable Rust has no
+// safe way to fill a `[T; N]` one fallible element at a time without either
+// `unsafe` (forbidden in this crate) or a `Default` bound on `T`. The encoder
+// for `[T; N]` has no such limit and is available without `alloc`.
 #[cfg(feature = "alloc")]
 impl<'a, T: Decode<'a>, const N: usize> Decode<'a> for [T; N] {
     fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError> {
@@ -601,7 +643,7 @@ impl<'a, T: Decode<'a>, const N: usize> Decode<'a> for [T; N] {
             return Err(DecodeError::TypeMismatch);
         }
         decoder.enter_container()?;
-        let mut items = Vec::with_capacity(N);
+        let mut items = Vec::with_capacity(N.min(PREALLOC_LIMIT));
         for _ in 0..N {
             items.push(T::decode(decoder)?);
         }

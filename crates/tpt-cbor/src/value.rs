@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use crate::decode::{Decode, Decoder, Kind};
+use crate::decode::{Decode, Decoder, Kind, PREALLOC_LIMIT};
 use crate::encode::Encoder;
 use crate::error::{DecodeError, EncodeError};
 use crate::Encode;
@@ -195,7 +195,7 @@ impl<'a> Decode<'a> for Value<'a> {
             Kind::Array => {
                 let n = decoder.decode_array_len()?;
                 decoder.enter_container()?;
-                let mut items = Vec::with_capacity(n);
+                let mut items = Vec::with_capacity(n.min(PREALLOC_LIMIT));
                 for _ in 0..n {
                     items.push(Value::decode(decoder)?);
                 }
@@ -205,7 +205,7 @@ impl<'a> Decode<'a> for Value<'a> {
             Kind::Map => {
                 let n = decoder.decode_map_len()?;
                 decoder.enter_container()?;
-                let mut pairs = Vec::with_capacity(n);
+                let mut pairs = Vec::with_capacity(n.min(PREALLOC_LIMIT));
                 let mut prev: Option<(usize, usize)> = None;
                 for _ in 0..n {
                     let key_start = decoder.position();

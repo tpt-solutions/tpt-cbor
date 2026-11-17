@@ -40,6 +40,9 @@ pub enum DecodeError {
     MissingField,
     /// A derived enum was given a variant name it does not have.
     UnknownVariant,
+    /// A container declares more elements or pairs than
+    /// `Config::max_items` allows.
+    LimitExceeded,
 }
 
 impl fmt::Display for DecodeError {
@@ -59,6 +62,7 @@ impl fmt::Display for DecodeError {
             Self::TrailingBytes => "trailing bytes after top-level item",
             Self::MissingField => "required field missing",
             Self::UnknownVariant => "unknown enum variant",
+            Self::LimitExceeded => "container length exceeds the configured limit",
         };
         f.write_str(msg)
     }
