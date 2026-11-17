@@ -1,0 +1,31 @@
+[package]
+name = "tpt-cbor"
+description = "Zero-dependency, strict-canonical CBOR (RFC 8949) codec with zero-copy decoding and panic-free parsing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["cbor", "rfc8949", "serialization", "no_std", "zero-copy"]
+categories = ["encoding", "no-std", "no-std::no-alloc"]
+
+# The core crate has NO dependencies. Do not add any here; see deny.toml and
+# the zero-dependency CI check.
+[dependencies]
+
+[features]
+default = ["alloc"]
+# Heap-backed types: `Value`, `Vec<T>`, `String`, `Encoder` over `Vec<u8>`.
+alloc = []
+# std::io::{Read, Write} adapters. Implies `alloc`.
+std = ["alloc"]
+
+[dev-dependencies]
+
+# Dev-only, dependency-free benchmark (std::time). Not part of the published API.
+[[bench]]
+name = "codec"
+harness = false
+required-features = ["alloc"]

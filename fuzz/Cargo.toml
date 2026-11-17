@@ -1,0 +1,23 @@
+# Fuzz harness. Deliberately NOT a member of the main workspace, so its
+# dependencies (libfuzzer-sys) never enter the published crate's graph.
+[package]
+name = "tpt-cbor-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tpt-cbor = { path = "../crates/tpt-cbor" }
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+
+[workspace]
+members = ["."]

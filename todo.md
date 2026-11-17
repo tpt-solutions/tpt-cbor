@@ -14,75 +14,75 @@ Owner: TPT Solutions · License: MIT OR Apache-2.0 · Policy: zero dependencies 
 ---
 
 ## Phase 0 — Project Setup
-- [ ] `git init`, add `.gitignore` (target/, Cargo.lock policy for libs)
-- [ ] Create Cargo workspace (`tpt-cbor`, `tpt-cbor-derive` placeholder)
-- [ ] Pin edition 2021 and choose/pin MSRV (`rust-version`) + `rust-toolchain.toml`
-- [ ] Add `LICENSE-MIT` (copyright TPT Solutions)
-- [ ] Add `LICENSE-APACHE` (Apache-2.0 text, TPT Solutions)
-- [ ] Set `license = "MIT OR Apache-2.0"` in every Cargo.toml
-- [ ] Add license section + contribution clause (dual-license inbound=outbound) to README
-- [ ] Write README (goals, feature flags, quick example)
-- [ ] Add `deny.toml` (cargo-deny): allow only permissive licenses, reject Apache-only deps, ban unexpected deps in core
-- [ ] CI: build/test on stable + MSRV, `no_std` build (thumbv7em target), clippy, rustfmt, cargo-deny
-- [ ] Crate-level lints: `#![no_std]`, `#![forbid(unsafe_code)]`, `#![deny(missing_docs)]`
-- [ ] Clippy deny-list in core (CI-enforced): `indexing_slicing`, `unwrap_used`, `expect_used`, `panic`, `arithmetic_side_effects`
-- [ ] Amend spec.txt §4 (bytewise map order), §7 (drop SIMD claim, branchless wording) and §5.3 to match decisions
-- [ ] Reserve crate names on crates.io (`tpt-cbor`, `tpt-cbor-derive`, `tpt-cbor-serde`)
+- [x] `git init`, add `.gitignore` (target/, Cargo.lock policy for libs) — repo already initialised; `.gitignore` covers target/, Cargo.lock, fuzz output
+- [x] Create Cargo workspace (`tpt-cbor`, `tpt-cbor-derive` placeholder)
+- [x] Pin edition 2021 and choose/pin MSRV (`rust-version`) + `rust-toolchain.toml` — MSRV 1.85, pinned in `rust-toolchain.toml`
+- [x] Add `LICENSE-MIT` (copyright TPT Solutions)
+- [x] Add `LICENSE-APACHE` (Apache-2.0 text, TPT Solutions) — verbatim Apache-2.0 text
+- [x] Set `license = "MIT OR Apache-2.0"` in every Cargo.toml
+- [x] Add license section + contribution clause (dual-license inbound=outbound) to README
+- [x] Write README (goals, feature flags, quick example)
+- [x] Add `deny.toml` (cargo-deny): allow only permissive licenses, reject Apache-only deps, ban unexpected deps in core — config written; `cargo-deny` not run locally (not installed)
+- [x] CI: build/test on stable + MSRV, `no_std` build (thumbv7em target), clippy, rustfmt, cargo-deny — workflow written; not yet run on GitHub
+- [x] Crate-level lints: `#![no_std]`, `#![forbid(unsafe_code)]`, `#![deny(missing_docs)]`
+- [x] Clippy deny-list in core (CI-enforced): `indexing_slicing`, `unwrap_used`, `expect_used`, `panic`, `arithmetic_side_effects` — clean with `-D warnings`
+- [x] Amend spec.txt §4 (bytewise map order), §7 (drop SIMD claim, branchless wording) and §5.3 to match decisions
+- [ ] Reserve crate names on crates.io (`tpt-cbor`, `tpt-cbor-derive`, `tpt-cbor-serde`) — **needs you**: requires a crates.io account and publishing; not done
 
 ## Phase 1 — Core Substrate (`tpt-cbor`, zero deps)
 ### Errors & config
-- [ ] `DecodeError` (incl. `DepthExceeded`, `Overflow`, `UnexpectedEof`, `InvalidUtf8`, `IndefiniteLength`, `NonCanonical`, `UnsortedMap`, `DuplicateKey`, `UnsupportedType`, `TrailingBytes`)
-- [ ] `EncodeError`
-- [ ] `Display` + `core::error::Error` impls (std `Error` behind feature if MSRV requires)
-- [ ] Decode config: `strict` (default) vs `lenient`; max depth (default 64)
+- [x] `DecodeError` (incl. `DepthExceeded`, `Overflow`, `UnexpectedEof`, `InvalidUtf8`, `IndefiniteLength`, `NonCanonical`, `UnsortedMap`, `DuplicateKey`, `UnsupportedType`, `TrailingBytes`)
+- [x] `EncodeError`
+- [x] `Display` + `core::error::Error` impls (std `Error` behind feature if MSRV requires)
+- [x] Decode config: `strict` (default) vs `lenient`; max depth (default 64)
 ### Decoder (zero-copy, flat, panic-free)
-- [ ] `Decoder<'a>` struct (input, offset, depth)
-- [ ] Header parse: major type + additional info (branchless-style bit ops)
-- [ ] Argument decode with `checked_add` / `ok_or(Overflow)`; no `unwrap`/`expect`/indexing panics
-- [ ] Minimal-integer check (strict) for all argument widths
-- [ ] `decode_u64` / `decode_i64` (error on out-of-range)
-- [ ] `decode_bytes() -> &'a [u8]` (zero-copy)
-- [ ] `decode_str() -> &'a str` (zero-copy, UTF-8 via `core::str::from_utf8`)
-- [ ] Arrays + maps with definite lengths; length-vs-remaining-input sanity check (no huge pre-allocation)
-- [ ] Map key ordering + duplicate detection (strict)
-- [ ] Floats: half/single/double decode; canonical-form check (strict)
-- [ ] Bool / null; reject undefined, unknown simple values, tags with clear errors
-- [ ] Reject indefinite-length items (always)
-- [ ] Depth tracking and `DepthExceeded`
-- [ ] `peek` / `finish` (trailing-bytes check) helpers
-- [ ] Non-allocating `skip_item`/`validate` pass (flat, no `Vec`/`String`); decode-to-`Value` builds on it
+- [x] `Decoder<'a>` struct (input, offset, depth)
+- [x] Header parse: major type + additional info (branchless-style bit ops) — bit-mask parsing; no branch-free claim (spec §7 amended)
+- [x] Argument decode with `checked_add` / `ok_or(Overflow)`; no `unwrap`/`expect`/indexing panics
+- [x] Minimal-integer check (strict) for all argument widths
+- [x] `decode_u64` / `decode_i64` (error on out-of-range)
+- [x] `decode_bytes() -> &'a [u8]` (zero-copy)
+- [x] `decode_str() -> &'a str` (zero-copy, UTF-8 via `core::str::from_utf8`)
+- [x] Arrays + maps with definite lengths; length-vs-remaining-input sanity check (no huge pre-allocation)
+- [x] Map key ordering + duplicate detection (strict)
+- [x] Floats: half/single/double decode; canonical-form check (strict)
+- [x] Bool / null; reject undefined, unknown simple values, tags with clear errors
+- [x] Reject indefinite-length items (always)
+- [x] Depth tracking and `DepthExceeded`
+- [x] `peek` / `finish` (trailing-bytes check) helpers
+- [x] Non-allocating `skip_item`/`validate` pass (flat, no `Vec`/`String`); decode-to-`Value` builds on it
 ### Encoder (strict canonical)
-- [ ] `Encoder` writing to `Vec<u8>` (alloc)
-- [ ] Minimal integer encoding
-- [ ] Canonical floats: smallest lossless width; canonical quiet NaN (`0xf97e00`); ±0, ±inf
-- [ ] Definite-length bytes/text/array/map only
-- [ ] Map encoding sorted by encoded-key bytewise order (RFC 8949 §4.2.1)
-- [ ] Bool / null
+- [x] `Encoder` writing to `Vec<u8>` (alloc) — via `Sink` trait (`Vec<u8>` impl)
+- [x] Minimal integer encoding
+- [x] Canonical floats: smallest lossless width; canonical quiet NaN (`0xf97e00`); ±0, ±inf
+- [x] Definite-length bytes/text/array/map only
+- [x] Map encoding sorted by encoded-key bytewise order (RFC 8949 §4.2.1)
+- [x] Bool / null
 ### Traits & Value
-- [ ] `Encode` and `Decode<'a>` traits
-- [ ] Impls: ints (u8–u64, i8–i64), bool, `f32`/`f64`, `&str`, `String`, `&[u8]`, `Vec<T>`, `Option<T>`, arrays, tuples
-- [ ] `Value<'a>` enum (`Integer`, `Bytes`, `Text`, `Array`, `Map`, `Float`, `Bool`, `Null`)
-- [ ] `Value` encode (sort map keys canonically) and decode
-- [ ] `Value` helper accessors (`as_str`, `as_i64`, `get`, etc.)
+- [x] `Encode` and `Decode<'a>` traits
+- [x] Impls: ints (u8–u64, i8–i64), bool, `f32`/`f64`, `&str`, `String`, `&[u8]`, `Vec<T>`, `Option<T>`, arrays, tuples — `Vec<u8>` encodes as an array; use `&[u8]` for byte strings
+- [x] `Value<'a>` enum (`Integer`, `Bytes`, `Text`, `Array`, `Map`, `Float`, `Bool`, `Null`)
+- [x] `Value` encode (sort map keys canonically) and decode
+- [x] `Value` helper accessors (`as_str`, `as_i64`, `get`, etc.)
 ### Features
-- [ ] `default` = core + alloc; verify `no_std` + `alloc` builds
-- [ ] `std` feature: `Encoder` over `io::Write`
-- [ ] `std` feature: read-to-buffer helper for `io::Read` -> zero-copy decode
+- [x] `default` = core + alloc; verify `no_std` + `alloc` builds — verified: no-default, alloc, std, thumbv7em
+- [x] `std` feature: `Encoder` over `io::Write`
+- [x] `std` feature: read-to-buffer helper for `io::Read` -> zero-copy decode
 ### Testing & quality
-- [ ] RFC 8949 Appendix A test vectors (decode + canonical re-encode where applicable)
-- [ ] Round-trip tests (unit + property-style, without external deps)
-- [ ] Malformed-input corpus: truncated, bad lengths, bad UTF-8, indefinite, deep nesting, overflow
-- [ ] Exhaustive header tests: all 256 first bytes, and each with every 1–2 argument-byte combination
-- [ ] Determinism test: identical data -> identical bytes
-- [ ] Lenient-mode tests
-- [ ] Zero-allocation-on-decode test (counting allocator)
-- [ ] Fuzz harness (cargo-fuzz kept in a separate, non-published dir); short smoke run in every-PR CI, long runs nightly
-- [ ] Benchmarks (dev-only, kept out of core dependency graph)
-- [ ] Rustdoc with examples; doc-tests pass
-- [ ] Confirm `cargo tree` shows zero dependencies
+- [ ] RFC 8949 Appendix A test vectors (decode + canonical re-encode where applicable) — *partial*: ~70 vectors covering all major types; full Appendix A not yet transcribed and checked against the RFC text
+- [x] Round-trip tests (unit + property-style, without external deps) — deterministic PRNG generator, 5,000 cases
+- [x] Malformed-input corpus: truncated, bad lengths, bad UTF-8, indefinite, deep nesting, overflow
+- [x] Exhaustive header tests: all 256 first bytes, and each with every 1–2 argument-byte combination — all 2-byte inputs, plus argument-width sweep
+- [x] Determinism test: identical data -> identical bytes
+- [x] Lenient-mode tests
+- [x] Zero-allocation-on-decode test (counting allocator)
+- [ ] Fuzz harness (cargo-fuzz kept in a separate, non-published dir); short smoke run in every-PR CI, long runs nightly — *written* in `fuzz/` (asserts strict-decode ⇒ canonical re-encode); **not run** (needs nightly + libFuzzer); CI job added
+- [x] Benchmarks (dev-only, kept out of core dependency graph) — dependency-free `benches/codec.rs`; coarse numbers only
+- [x] Rustdoc with examples; doc-tests pass — crate, `Value` examples; more item-level docs possible
+- [x] Confirm `cargo tree` shows zero dependencies
 
 ## Phase 2 — Derive Macros (`tpt-cbor-derive`)
-- [ ] Crate setup (`proc-macro = true`), deps: `syn`, `quote`, `proc-macro2` only (license-checked)
+- [ ] Crate setup (`proc-macro = true`), deps: `syn`, `quote`, `proc-macro2` only (license-checked) — placeholder crate exists; derive deps not yet added
 - [ ] `#[derive(Encode)]` for structs (named, tuple, unit)
 - [ ] `#[derive(Decode)]` for structs with borrowed fields (`'a` lifetime handling)
 - [ ] Enum support (unit, tuple, struct variants) with defined wire representation
@@ -119,11 +119,11 @@ Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1
 
 ## Phase 5 — Release
 - [ ] Full `cargo-deny` audit (licenses, advisories, sources)
-- [ ] Verify MSRV and `no_std` builds in CI
+- [ ] Verify MSRV and `no_std` builds in CI — MSRV and no_std verified locally; CI config written, not yet run
 - [ ] API review (naming, error types, semver surface)
-- [ ] `CHANGELOG.md`
+- [x] `CHANGELOG.md`
 - [ ] Final README/docs polish; docs.rs metadata
-- [ ] `cargo publish --dry-run` for each crate
+- [ ] `cargo publish --dry-run` for each crate — done for `tpt-cbor` (no upload). `tpt-cbor-derive` is a placeholder and must not be published yet
 - [ ] Publish `tpt-cbor`, then `tpt-cbor-derive`
 - [ ] Tag `v1.0.0` and create release notes
 
