@@ -1,0 +1,81 @@
+Design Specification: tpt-cbor v1.0
+1. Executive Summary
+tpt-cbor is a pure-Rust, zero-dependency implementation of the CBOR (RFC 8949) data format. It is designed to serve as the foundational binary serialization substrate for the TPT pure-Rust stack.
+Unlike existing implementations that rely on the serde ecosystem or carry transitive dependencies, tpt-cbor is built entirely on core and alloc. It prioritizes deterministic encoding, zero-copy decoding, panic-free execution, and a simplified parsing state machine to enable future formal verification.
+2. Core Design Principles
+Absolute Zero Dependencies: The core crate has zero external dependencies. No serde, no log, no hashbrown. It relies exclusively on core, alloc, and optionally std (behind a feature flag for I/O).
+Strict Canonicalization: While it can decode standard CBOR, it strictly encodes to a deterministic, canonical subset. Identical data structures will always produce identical byte streams.
+Panic-Free & Bounded: The parser will never panic on malformed input. Recursion is strictly bounded to prevent stack overflows and simplify verification.
+Zero-Copy First: Decoding borrows directly from the input slice. No intermediate allocations are made for strings, byte arrays, or map keys.
+3. Dependency & Feature Policy
+To maintain the "no dependencies" rule, the crate is structured with strict feature gates:
+default: Includes core and alloc. Enables heap-allocated Value types and standard encoding/decoding.
+std: Enables std::io::Read and std::io::Write streaming support. (Still zero external dependencies).
+no_std: The default state. Operates entirely in #![no_std] using only core and alloc.
+Ecosystem Bridge: Integration with serde or other ecosystems is explicitly excluded from this crate. If needed, a separate tpt-cbor-serde bridge crate will be authored, keeping the core pure.
+4. Wire Format Specification (Strict Canonical CBOR)
+tpt-cbor implements RFC 8949 but enforces a Strict Canonical Subset for encoding to eliminate ambiguity and simplify the parser:
+Definite Lengths Only: Indefinite-length strings, byte arrays, arrays, and maps are rejected during decoding and never emitted during encoding. This eliminates complex state-machine transitions.
+Minimal Integer Encoding: Integers are always encoded in the minimum number of bytes required (e.g., 1 is encoded as 0x01, not 0x18 0x01).
+Strict Map Ordering: Map keys must be sorted strictly by:
+Length of the encoded key (shorter keys first).
+Lexicographical byte order of the encoded key.
+Float Canonicalization: NaN payloads are normalized to a single canonical quiet NaN. Floats are encoded in the smallest representation that preserves the value (e.g., 1.0 is encoded as a half-precision float, not double).
+5. Core API Architecture
+Because we cannot rely on serde, tpt-cbor provides its own lightweight, zero-cost traits.
+5.1. The Encode and Decode Traits
+// Core traits defined in tpt-cbor
+pub trait Encode {
+    fn encode(&self, encoder: &mut Encoder) -> Result<(), EncodeError>;
+}
+
+pub trait Decode<'a>: Sized {
+    fn decode(decoder: &mut Decoder<'a>) -> Result<Self, DecodeError>;
+}
+
+5.2. Zero-Copy Decoder
+The Decoder holds a reference to the input slice and tracks the current offset. It returns borrowed data for strings and bytes.
+pub struct Decoder<'a> {
+    input: &'a [u8],
+    offset: usize,
+    depth: u8, // Bounded recursion tracker
+}
+
+impl<'a> Decoder<'a> {
+    /// Returns a borrowed string slice directly from the input.
+    pub fn decode_str(&mut self) -> Result<&'a str, DecodeError> { ... }
+    
+    /// Returns a borrowed byte slice directly from the input.
+    pub fn decode_bytes(&mut self) -> Result<&'a [u8], DecodeError> { ... }
+}
+
+5.3. Dynamic Value Type
+For schemaless use cases, a lightweight Value enum is provided. It uses alloc::vec::Vec and alloc::string::String only when explicitly requested by the user.
+pub enum Value<'a> {
+    Integer(i64),
+    Bytes(&'a [u8]),
+    Text(&'a str),
+    Array(Vec<Value<'a>>),
+    Map(Vec<(Value<'a>, Value<'a>)>), // Sorted by canonical rules
+    Float(f64),
+    Bool(bool),
+    Null,
+}
+
+6. Safety and Verification Strategy
+To ensure the library can be formally verified (e.g., via Kani or future agentic verification tools), the internal architecture is restricted:
+Bounded Recursion: The Decoder enforces a maximum nesting depth (default: 64). If the depth exceeds this, it returns a DepthExceeded error. This guarantees the call stack cannot overflow.
+Checked Arithmetic: All offset additions and length calculations use .checked_add() and .ok_or(DecodeError::Overflow). No unwrap() or expect() is used on arithmetic operations.
+Flat State Machine: Because indefinite-length items are banned, the parser does not need a complex stack to track nested indefinite contexts. The state machine remains flat and highly predictable.
+No Unsafe Code in Core: The initial implementation will be 100% safe Rust. unsafe blocks may only be introduced later in highly specific, isolated SIMD-accelerated paths, strictly guarded by safety invariants.
+7. Performance Characteristics
+Branchless Integer Parsing: Utilizes bitwise operations and count_ones to parse CBOR major types and additional info without branching.
+SIMD UTF-8 Validation: When the std feature is enabled, string validation leverages architecture-specific SIMD instructions to validate UTF-8 bounds at memory-bandwidth speeds.
+Zero Allocation on Decode: Decoding into statically typed structs requires zero heap allocations, as all string/byte data is borrowed directly from the input buffer.
+8. Implementation Roadmap
+Phase 1: Core Substrate: Implement Encoder, Decoder, Encode, Decode traits, and the Value enum. Enforce strict canonical encoding. (Zero dependencies).
+Phase 2: Derive Macros: Create a separate tpt-cbor-derive crate (which will depend on syn/quote) to auto-generate Encode/Decode implementations for structs and enums.
+Phase 3: Formal Proof: Write kani proofs for the core parser to mathematically prove the absence of panics, out-of-bounds reads, and unbounded recursion.
+Phase 4: Ecosystem Bridge: (Optional) Build tpt-cbor-serde to allow downstream users to use serde derives if they refuse to adopt the native tpt-cbor traits.
+Licensing Note:
+In alignment with your open-source philosophy, tpt-cbor and its derive macros will be dual-licensed under MIT and Apache 2.0 to maximize ecosystem adoption, while the code itself remains strictly free of Apache-licensed (or any other) external dependencies.
