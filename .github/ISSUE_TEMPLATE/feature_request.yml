@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a new capability or a change in behaviour.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem you are trying to solve
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: Describe the API or wire-format change if you have one in mind.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints to confirm
+      options:
+        - label: The core crate would still have zero dependencies.
+        - label: The change keeps encoded output canonical.

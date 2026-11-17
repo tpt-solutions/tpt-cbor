@@ -1,0 +1,27 @@
+# Prepares a release pull request: version bumps and changelog entries.
+#
+# This workflow runs only when triggered by hand. It never publishes to
+# crates.io, and release-plz.toml sets `publish = false`. Do not add a publish
+# step here without a decision to publish.
+name: Release PR (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: MarcoIeni/release-plz-action@v0.5
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,43 @@
+name: Bug report
+description: Something decodes, encodes or behaves differently from what the documentation says.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: tpt-cbor version or commit
+    validations:
+      required: true
+  - type: dropdown
+    id: crate
+    attributes:
+      label: Which part
+      options:
+        - tpt-cbor (core codec)
+        - tpt-cbor-derive (derive macros)
+        - tpt-cbor-cli (command-line tool)
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Input bytes (hex)
+      description: For a decoding problem, paste the bytes as hex. `tpt-cbor hex-encode` prints them.
+      render: text
+  - type: textarea
+    id: code
+    attributes:
+      label: Minimal code or command
+      render: rust
+  - type: textarea
+    id: observed
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true

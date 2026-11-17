@@ -1,0 +1,9 @@
+# release-plz configuration. Publishing is turned off on purpose: this tool
+# only prepares release pull requests (version bumps and changelog entries).
+# Do not enable `publish` until the project has decided to publish.
+
+[workspace]
+publish = false
+git_release_enable = false
+changelog_update = true
+semver_check = true
