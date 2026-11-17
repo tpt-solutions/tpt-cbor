@@ -10,6 +10,12 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 - `#[derive(Encode)]` and `#[derive(Decode)]` for named, tuple and unit structs, and for externally tagged enums.
 - `#[cbor(rename = "...")]`, `#[cbor(skip)]` and `#[cbor(default)]` attributes.
 
+### Added (Phase 7)
+
+- Container attributes `rename_all`, `deny_unknown_fields` and `transparent`.
+- Field attributes `skip_serializing_if`, `with` and `bytes`.
+- Misplaced attributes, unknown rename rules and `bytes` on a non-byte type are compile errors, with trybuild cases for each.
+
 ### Fixed
 
 - Type parameters used only by `#[cbor(skip)]` fields no longer receive `Encode` or `Decode` bounds.

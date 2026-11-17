@@ -1,4 +1,4 @@
-error: duplicate variant name `A` (after `rename`)
+error: duplicate variant name `A` (after `rename` and `rename_all`)
  --> tests/ui/dup_variant.rs:7:5
   |
 7 |     B,

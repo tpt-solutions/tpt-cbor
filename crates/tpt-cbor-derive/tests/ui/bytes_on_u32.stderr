@@ -1,0 +1,5 @@
+error: `bytes` is supported only on `Vec<u8>` and `&[u8]` fields
+ --> tests/ui/bytes_on_u32.rs:6:8
+  |
+6 |     a: u32,
+  |        ^^^

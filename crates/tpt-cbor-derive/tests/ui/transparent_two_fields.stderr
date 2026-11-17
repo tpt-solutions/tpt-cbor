@@ -1,0 +1,7 @@
+error: `transparent` needs a struct with exactly one field
+ --> tests/ui/transparent_two_fields.rs:3:10
+  |
+3 | #[derive(Encode)]
+  |          ^^^^^^
+  |
+  = note: this error originates in the derive macro `Encode` (in Nightly builds, run with -Z macro-backtrace for more info)

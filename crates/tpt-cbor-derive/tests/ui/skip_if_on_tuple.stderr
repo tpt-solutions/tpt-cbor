@@ -1,0 +1,5 @@
+error: `rename`, `skip`, `default`, `skip_serializing_if` and `with` are only supported on named fields
+ --> tests/ui/skip_if_on_tuple.rs:4:10
+  |
+4 | struct S(#[cbor(skip_serializing_if = "is_zero")] u8);
+  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

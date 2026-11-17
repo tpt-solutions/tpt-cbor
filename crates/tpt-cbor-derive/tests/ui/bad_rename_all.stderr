@@ -1,0 +1,5 @@
+error: unknown rename_all rule; expected one of `lowercase`, `UPPERCASE`, `PascalCase`, `camelCase`, `snake_case`, `SCREAMING_SNAKE_CASE`, `kebab-case` or `SCREAMING-KEBAB-CASE`
+ --> tests/ui/bad_rename_all.rs:4:21
+  |
+4 | #[cbor(rename_all = "shouty")]
+  |                     ^^^^^^^^
