@@ -150,26 +150,30 @@ Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1
 - [ ] Run tests, clippy, fuzz (and Kani if installable); record real results in `VERIFICATION.md` — tests, clippy, rustfmt and no_std build are run and recorded. Fuzz (needs nightly + libFuzzer) and Kani (needs Linux/WSL) are **not run**
 
 ## Phase 7 — Ergonomics
-- [ ] `Value`: `From` impls, `Index<&str>` / `Index<usize>`, `Display` as diagnostic notation (RFC 8949 §8), owned/`into_owned` support, `cbor!{}` literal macro
-- [ ] More codec impls: `usize`/`isize`, `char`, `()`, `Box<T>`, `Cow`, `&T`, `BTreeMap`, `HashMap` (std, sorted on encode), tuples up to 8
-- [ ] `ByteBuf` newtype and `#[tpt(bytes)]` derive attribute for byte-string fields
-- [ ] Derive attributes: `rename_all`, `deny_unknown_fields`, `transparent`, `skip_serializing_if`, `with`
-- [ ] Error byte offsets (keep `DecodeError` variants `Copy`)
-- [ ] Helpers: `from_reader`, `to_vec_canonical`, `is_canonical`, `canonicalize`, `validate`, RFC 8742 sequence iterator
-- [ ] `prelude` module
+- [x] `Value`: `From` impls, `Index<&str>` / `Index<usize>` (a missing key or position gives `null`, never a panic), `Display` as diagnostic notation, `Value::into_owned` to `OwnedValue`, `cbor!{}` macro. Macro elements are single token trees, so write negative numbers as `(-1)`.
+- [x] More codec impls: `usize`/`isize`, `char`, `()`, `Box<T>`, `Cow` (`str`, `[u8]`, general), `BTreeMap`, `HashMap` (feature `std`, sorted on encode), tuples up to 8. `[u8]` encodes as a byte string. **Not added:** a blanket `&T` impl, because it would overlap the existing `&str` and `&[u8]` impls.
+- [x] `ByteBuf` newtype, and byte-string fields. The attribute is `#[cbor(bytes)]`, not `#[tpt(bytes)]`, to match the derive's existing attribute namespace.
+- [x] Derive attributes: `rename_all`, `deny_unknown_fields`, `transparent`, `skip_serializing_if`, `with`. Also `bytes`.
+- [x] Error byte offsets: `Located`, `from_slice_located*` and `validate`. `DecodeError` stays `Copy`. Offsets are approximate and documented as such.
+- [x] Helpers: `validate`, `is_canonical`, `canonicalize`, `sequence` (RFC 8742), `from_reader` (feature `std`). **Decision:** no separate `to_vec_canonical`. `to_vec` already writes canonical bytes, so another function would only duplicate it.
+- [x] `prelude` module.
 
 ## Phase 8 — CLI (`tpt-cbor-cli`)
-- [ ] New workspace crate with binary `tpt-cbor`
-- [ ] Subcommands: hex<->cbor, `diag`, `validate [--strict]`, `canon`, json<->cbor
-- [ ] stdin/stdout and file IO; exit codes and offsets on validation failure
-- [ ] Keep the `zero-deps` CI job scoped to `tpt-cbor`; document `cargo install` in the README
+- [x] Workspace crate `crates/tpt-cbor-cli` with binary `tpt-cbor`. `publish = false`.
+- [x] Subcommands: `hex-encode`, `hex-decode`, `diag`, `validate [--strict]`, `canon`, `cbor-to-json`, `json-to-cbor`. The todo's "hex<->cbor" and "json<->cbor" became one command per direction.
+- [x] stdin/stdout and file I/O (`-i`, `-o`). Exit status 0 success, 1 invalid input, 2 usage or I/O error. Validation errors report the byte offset.
+- [x] The zero-dependency CI check still covers only `tpt-cbor` (it has no dev-dependencies). `cargo install --path` is documented in the CLI's README. **Root README not updated:** it has uncommitted edits made outside this work.
 
 ## Phase 9 — Adoption tooling
-- [ ] CI: rustdoc `-D warnings`, `cargo semver-checks`, `cargo publish --dry-run` for all crates, miri, MSRV job, minimal-versions, coverage, Kani job, scheduled long fuzz with corpus cache, `derive` in the test matrix, deny covering `fuzz/`
-- [ ] Release automation (release-plz or cargo-release), tag-driven publish workflow, dependabot
-- [ ] `CONTRIBUTING.md`, issue/PR templates, `rustfmt.toml`, `clippy.toml`
-- [ ] Docs: README comparison vs ciborium/minicbor/serde_cbor, migration guide, cookbook, no_std/embedded guide
-- [ ] Examples: `no_std_embedded`, `canonical_sign`, `hostile_input`, CLI usage
-- [ ] Commit a fuzz seed corpus
-- [ ] Criterion benchmarks against ciborium and minicbor in a separate bench crate
-- [ ] Reserve crates.io names (`tpt-cbor`, `tpt-cbor-derive`, `tpt-cbor-cli`, `tpt-cbor-serde`)
+- [x] CI: rustdoc with `-D warnings`, `--all-features` in the test matrix, cargo-deny for `fuzz/`, the MSRV (1.85.0) in the test matrix, Kani (weekly or manual), scheduled long fuzz with a corpus cache, minimal-versions (weekly), miri (weekly, library tests), coverage (report only), cargo-semver-checks (advisory until the first release). Miri, minimal-versions, coverage, semver and Kani are written but **not run** here.
+- [ ] `cargo publish --dry-run` for `tpt-cbor`. **Blocked** until `tpt-cbor-derive` is on crates.io, because `tpt-cbor` depends on it (optionally). The derive crate's dry run passes.
+- [x] Dependency cycle removed. Derive tests moved to `crates/tpt-cbor-derive-tests` (`publish = false`), so `tpt-cbor-derive` no longer depends on `tpt-cbor`. Keeping trybuild out of `tpt-cbor` keeps its zero-dependency check clean.
+- [x] Release automation: `release-plz.toml` with `publish = false`, and a manual-only `release-pr` workflow. **No tag-driven publish workflow**, because there is no decision to publish yet.
+- [x] Dependabot for the root workspace, `fuzz/`, and GitHub Actions.
+- [x] `SECURITY.md` (private advisories), `CONTRIBUTING.md` (issues only), `CODE_OF_CONDUCT.md` (summary, pointing to Contributor Covenant 2.1), issue forms, and a config that turns off blank issues. **No PR template:** pull requests are not accepted.
+- [x] `rustfmt.toml` (edition) and `clippy.toml` (MSRV).
+- [x] Docs in `docs/`: cookbook, migration from serde_cbor, no_std and embedded, and comparison. **Not done:** a link from the root README, which has uncommitted edits. The comparison's facts about other crates are from memory, and should be checked before release.
+- [x] Examples: `no_std_embedded`, `canonical_sign` and `hostile_input` in the core crate. CLI usage is in its README.
+- [x] Fuzz seed corpus: `fuzz/seeds/decode` (167 files, generated from the test vectors). CI copies it into the corpus.
+- [ ] Criterion benchmarks against ciborium and minicbor. **Written but not committed.** Both comparison crates break the dependency policy: ciborium is Apache-2.0 only, and minicbor is BlueOak-1.0.0. This needs a policy decision, because the policy has no exception for dev-only tools. Short local run, not committed: tpt-cbor decode about 291 ns, minicbor 297 ns, ciborium 773 ns. tpt-cbor encode about 582 ns, minicbor 470 ns, ciborium 418 ns. Numbers depend on the machine.
+- [ ] Reserve crates.io names. **Not done:** it needs a crates.io account, and publishing is out of scope.
