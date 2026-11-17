@@ -1,0 +1,2 @@
+# Fuzz seeds are raw binary. Never convert their line endings.
+fuzz/seeds/** -text
