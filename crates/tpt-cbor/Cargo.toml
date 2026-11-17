@@ -34,3 +34,9 @@ derive = ["dep:tpt-cbor-derive"]
 name = "codec"
 harness = false
 required-features = ["alloc"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
+[package.metadata.docs.rs]
+all-features = true

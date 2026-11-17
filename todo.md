@@ -82,47 +82,47 @@ Owner: TPT Solutions · License: MIT OR Apache-2.0 · Policy: zero dependencies 
 - [x] Confirm `cargo tree` shows zero dependencies
 
 ## Phase 2 — Derive Macros (`tpt-cbor-derive`)
-- [ ] Crate setup (`proc-macro = true`), deps: `syn`, `quote`, `proc-macro2` only (license-checked) — placeholder crate exists; derive deps not yet added
-- [ ] `#[derive(Encode)]` for structs (named, tuple, unit)
-- [ ] `#[derive(Decode)]` for structs with borrowed fields (`'a` lifetime handling)
-- [ ] Enum support (unit, tuple, struct variants) with defined wire representation
-- [ ] Generics and where-clause handling
-- [ ] Field attributes (rename, skip, default, etc. — define the minimal set)
-- [ ] Deterministic field/map-key ordering in generated encoders
-- [ ] `derive` feature re-export from `tpt-cbor`
-- [ ] Compile-fail tests (trybuild or equivalent permissively licensed tool)
-- [ ] Round-trip tests for derived types
-- [ ] Docs and examples
+- [x] Crate setup (`proc-macro = true`), deps: `syn`, `quote`, `proc-macro2` only (license-checked) — `tpt-cbor-derive` with syn 2 / quote / proc-macro2 (build-time only)
+- [x] `#[derive(Encode)]` for structs (named, tuple, unit)
+- [x] `#[derive(Decode)]` for structs with borrowed fields (`'a` lifetime handling) — one lifetime parameter supported
+- [x] Enum support (unit, tuple, struct variants) with defined wire representation — externally tagged: unit = text name; others = {"Name": payload}
+- [x] Generics and where-clause handling — type params bounded; at most one lifetime
+- [x] Field attributes (rename, skip, default, etc. — minimal set: rename, skip, default (Option fields default to None)
+- [x] Deterministic field/map-key ordering in generated encoders — keys sorted at compile time by encoded bytes
+- [x] `derive` feature re-export from `tpt-cbor` — opt-in; default build stays dependency-free
+- [ ] Compile-fail tests (trybuild or equivalent permissively licensed tool) — deferred: not added to keep the dev-dependency graph small; macro errors are reported via syn::Error
+- [x] Round-trip tests for derived types
+- [ ] Docs and examples — crate-level format docs written; examples not yet added
 
 ## Phase 3 — Formal Verification (Kani, narrowed)
 Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1; Kani only proves what they can't.
-- [ ] Install Kani; add `kani` cfg harness module
-- [ ] `cfg(kani)`: shrink max depth to 2–3; stub `core::str::from_utf8` with `kani::any`
-- [ ] Harness: header parse never panics for any bytes
-- [ ] Harness: argument read + offset/length arithmetic never overflows or reads out of bounds
-- [ ] Harness: `skip_item` never panics, never reads out of bounds (8–16 byte symbolic input, per-harness `#[kani::unwind]`)
-- [ ] Harness: recursion depth bounded by max depth
-- [ ] Harness: encoder output for ints/floats is minimal (symbolic value)
+- [ ] Install Kani; add `kani` cfg harness module — harness module written (`src/proofs.rs`). **Blocked**: Kani install was denied by the permission check; needs your approval to run `cargo install kani-verifier` and `cargo kani setup`
+- [x] `cfg(kani)`: shrink max depth to 2–3; stub `core::str::from_utf8` with `kani::any` — written, not run
+- [x] Harness: header parse never panics for any bytes — written, not run
+- [x] Harness: argument read + offset/length arithmetic never overflows or reads out of bounds — partly covered (unsigned encoding minimal/round-trip); written, not run
+- [x] Harness: `skip_item` never panics, never reads out of bounds (8–16 byte symbolic input, per-harness `#[kani::unwind]`) — written, not run
+- [ ] Harness: recursion depth bounded by max depth — not written as a Kani harness; covered by `malformed.rs` tests
+- [x] Harness: encoder output for ints/floats is minimal (symbolic value) — written, not run
 - [ ] Reuse proofs via `stub_verified` / contracts where possible
 - [ ] Try `#[kani::solver(cadical)]`; record timings
 - [ ] Keep `Vec`/`String`/`Value` code out of proofs (covered by fuzzing + tests)
 - [ ] Kani CI job runs nightly / on release branches only
-- [ ] Document proved properties and limits in `VERIFICATION.md`
+- [x] Document proved properties and limits in `VERIFICATION.md` — status file written; results pending Kani run
 
 ## Phase 4 — Ecosystem Bridge (Optional: `tpt-cbor-serde`)
-- [ ] Decide go/no-go
-- [ ] Crate setup (depends on `serde` — license-check, MIT OR Apache-2.0)
-- [ ] `Serializer` using canonical encoder
-- [ ] `Deserializer` using zero-copy decoder
-- [ ] Tests against serde derive types
-- [ ] Docs; keep core crate untouched and serde-free
+- [x] Decide go/no-go — **no-go for v1.0** (recommended): keeps core serde-free; bridge deferred
+- [ ] Crate setup (depends on `serde` — deferred (no-go for v1.0)
+- [ ] `Serializer` using canonical encoder — deferred
+- [ ] `Deserializer` using zero-copy decoder — deferred
+- [ ] Tests against serde derive types — deferred
+- [x] Docs; keep core crate untouched and serde-free — core stays serde-free
 
 ## Phase 5 — Release
-- [ ] Full `cargo-deny` audit (licenses, advisories, sources)
+- [x] Full `cargo-deny` audit (licenses, advisories, sources) — advisories, bans, licences, sources all pass
 - [ ] Verify MSRV and `no_std` builds in CI — MSRV and no_std verified locally; CI config written, not yet run
-- [ ] API review (naming, error types, semver surface)
+- [ ] API review (naming, error types, semver surface) — partial. Open points: `Vec<u8>` encodes as an array (documented); `DecodeError`/`EncodeError` are `non_exhaustive`; `Config` fields are public
 - [x] `CHANGELOG.md`
-- [ ] Final README/docs polish; docs.rs metadata
+- [ ] Final README/docs polish; docs.rs metadata — docs.rs metadata set; README polish pending
 - [ ] `cargo publish --dry-run` for each crate — done for `tpt-cbor` (no upload). `tpt-cbor-derive` is a placeholder and must not be published yet
 - [ ] Publish `tpt-cbor`, then `tpt-cbor-derive`
 - [ ] Tag `v1.0.0` and create release notes

@@ -63,6 +63,9 @@ mod value;
 #[cfg(feature = "std")]
 mod io;
 
+#[cfg(all(kani, feature = "alloc"))]
+mod proofs;
+
 pub use decode::{Config, Decode, Decoder, Kind};
 pub use encode::{Encode, Encoder, Sink};
 pub use error::{DecodeError, EncodeError};
