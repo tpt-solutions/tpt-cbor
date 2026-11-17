@@ -14,6 +14,12 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 - `derive` feature: re-exports the `Encode` and `Decode` derive macros from `tpt-cbor-derive`.
 - `Config::max_items` (default `DEFAULT_MAX_ITEMS`, 2^20) and `DecodeError::LimitExceeded`. The limit applies to each array or map, and is checked after the input-length check.
 - `Debug` for `Decoder` (omits input bytes) and `Encoder`.
+- `From` impls, `Index<&str>` / `Index<usize>` (never panic), `Display` in diagnostic notation, and the `cbor!` macro for `Value`.
+- `OwnedValue` and `Value::into_owned`; `ByteBuf` for owned byte strings.
+- Codecs for `usize`, `isize`, `char`, `()`, `Box`, `Cow`, `BTreeMap`, `HashMap` (feature `std`), `[u8]`, and tuples up to arity 8.
+- `Located`, with `from_slice_located` and `from_slice_located_with_config`, for errors with a byte offset.
+- `validate`, `is_canonical`, `canonicalize`, `sequence` and `sequence_with_config` (RFC 8742), `from_reader` (feature `std`), and `prelude`.
+- `EncodeError::BufferFull` for fixed-capacity sinks, and `DecodeError::UnknownField`.
 
 ### Changed
 

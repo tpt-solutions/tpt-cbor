@@ -107,6 +107,9 @@ pub enum EncodeError {
     /// that the type stays `Copy` and `Eq`.
     #[cfg(feature = "std")]
     Io(std::io::ErrorKind),
+    /// A fixed-capacity [`crate::Sink`] has no room for the bytes. Returned
+    /// by sinks written by the caller, for example over a static buffer.
+    BufferFull,
 }
 
 impl fmt::Display for EncodeError {
@@ -116,6 +119,7 @@ impl fmt::Display for EncodeError {
             Self::DuplicateKey => f.write_str("duplicate map key"),
             #[cfg(feature = "std")]
             Self::Io(kind) => write!(f, "I/O error while writing: {kind:?}"),
+            Self::BufferFull => f.write_str("output buffer is full"),
         }
     }
 }
