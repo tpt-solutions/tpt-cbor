@@ -16,6 +16,10 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 - Field attributes `skip_serializing_if`, `with` and `bytes`.
 - Misplaced attributes, unknown rename rules and `bytes` on a non-byte type are compile errors, with trybuild cases for each.
 
+### Changed
+
+- The derive crate has no dependencies on `tpt-cbor` now, not even as a dev-dependency. Its tests and compile-fail cases moved to the unpublished `tpt-cbor-derive-tests` crate. A dependency in both directions would make the two crates impossible to publish in order.
+
 ### Fixed
 
 - Type parameters used only by `#[cbor(skip)]` fields no longer receive `Encode` or `Decode` bounds.

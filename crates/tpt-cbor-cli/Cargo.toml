@@ -16,6 +16,10 @@ publish = false
 [[bin]]
 name = "tpt-cbor"
 path = "src/main.rs"
+# The binary has the same name as the library, so its docs would collide
+# with tpt-cbor's (rustdoc warns, which fails CI). The tool's documentation
+# is its README and `--help`.
+doc = false
 
 [dependencies]
 tpt-cbor = { version = "0.1.0", path = "../tpt-cbor", features = ["std"] }

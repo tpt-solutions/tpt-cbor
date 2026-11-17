@@ -1,0 +1,18 @@
+[package]
+name = "tpt-cbor-derive-tests"
+description = "Tests and examples for the tpt-cbor derive macros. Not published."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+# This crate exists so that tpt-cbor-derive has no dependency on tpt-cbor.
+# tpt-cbor depends on tpt-cbor-derive (optionally), so a dev-dependency in the
+# other direction would make the two impossible to publish in order.
+[dev-dependencies]
+tpt-cbor = { path = "../tpt-cbor", version = "0.1.0", features = ["derive"] }
+# Pinned: newer trybuild releases need rustc 1.88, and the MSRV is 1.85.
+trybuild = "=1.0.100"

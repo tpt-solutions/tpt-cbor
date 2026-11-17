@@ -23,8 +23,3 @@ all-features = true
 proc-macro2 = "1"
 quote = "1"
 syn = "2"
-
-[dev-dependencies]
-tpt-cbor = { version = "0.1.0", path = "../tpt-cbor", features = ["derive"] }
-# Dev-only compile-fail tests (MIT OR Apache-2.0). Not in the core crate's graph.
-trybuild = "1"

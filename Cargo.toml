@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/tpt-cbor", "crates/tpt-cbor-derive", "crates/tpt-cbor-cli"]
+members = ["crates/tpt-cbor", "crates/tpt-cbor-derive", "crates/tpt-cbor-cli", "crates/tpt-cbor-derive-tests"]
 
 [workspace.package]
 version = "0.1.0"

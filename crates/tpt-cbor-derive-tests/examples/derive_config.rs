@@ -1,6 +1,6 @@
 //! Derive `Encode` and `Decode` for a config-like struct and an enum.
 //!
-//! Run with `cargo run -p tpt-cbor-derive --example derive_config`.
+//! Run with `cargo run -p tpt-cbor-derive-tests --example derive_config`.
 
 use tpt_cbor::{from_slice, to_vec, Decode, Encode};
 

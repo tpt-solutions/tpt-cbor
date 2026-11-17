@@ -63,8 +63,8 @@ Attributes that do not apply to the item they sit on are rejected at compile tim
 ## Testing
 
 ```sh
-cargo test -p tpt-cbor-derive                      # behaviour tests and compile-fail cases
-cargo run -p tpt-cbor-derive --example derive_config
+cargo test -p tpt-cbor-derive-tests                # behaviour tests and compile-fail cases
+cargo run -p tpt-cbor-derive-tests --example derive_config
 ```
 
 Build-time dependencies are `syn`, `quote` and `proc-macro2`. None are linked into `tpt-cbor` itself.
