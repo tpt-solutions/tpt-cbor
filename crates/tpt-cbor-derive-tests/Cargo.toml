@@ -15,4 +15,4 @@ publish = false
 [dev-dependencies]
 tpt-cbor = { path = "../tpt-cbor", version = "0.1.0", features = ["derive"] }
 # Pinned: newer trybuild releases need rustc 1.88, and the MSRV is 1.85.
-trybuild = "=1.0.100"
+trybuild = "=1.0.122"
