@@ -353,7 +353,12 @@ impl<'a> Decoder<'a> {
 
     /// Checks that map key `cur` follows `prev` in canonical order. Each range
     /// is a byte span within the input. Only enforced in strict mode.
-    pub(crate) fn check_key_order(
+    /// Checks that a map key follows the previous key in canonical order.
+    ///
+    /// `prev` and `cur` are byte spans of the two encoded keys in the input,
+    /// obtained from [`Decoder::position`]. Used by hand-written and derived
+    /// map decoders. Only enforced in strict mode.
+    pub fn check_key_order(
         &self,
         prev: Option<(usize, usize)>,
         cur: (usize, usize),

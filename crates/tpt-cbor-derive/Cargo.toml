@@ -1,0 +1,23 @@
+[package]
+name = "tpt-cbor-derive"
+description = "Derive macros for tpt-cbor (use the `derive` feature of tpt-cbor instead)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+
+[lib]
+proc-macro = true
+
+# Build-time only. These are never linked into tpt-cbor itself, and are only
+# pulled into a build when the `derive` feature of tpt-cbor is enabled.
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = "2"
+
+[dev-dependencies]
+tpt-cbor = { version = "0.1.0", path = "../tpt-cbor", features = ["derive"] }

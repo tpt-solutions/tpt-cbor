@@ -76,6 +76,9 @@ pub use encode::IoSink;
 #[cfg(feature = "std")]
 pub use io::{read_to_buffer, to_writer};
 
+#[cfg(feature = "derive")]
+pub use tpt_cbor_derive::{Decode, Encode};
+
 /// Default maximum container nesting depth accepted by the decoder and
 /// produced by the encoder.
 pub const DEFAULT_MAX_DEPTH: usize = 64;

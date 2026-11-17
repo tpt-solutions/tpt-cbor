@@ -36,6 +36,10 @@ pub enum DecodeError {
     Malformed,
     /// Bytes remain after the top-level item.
     TrailingBytes,
+    /// A derived struct is missing a required field.
+    MissingField,
+    /// A derived enum was given a variant name it does not have.
+    UnknownVariant,
 }
 
 impl fmt::Display for DecodeError {
@@ -53,6 +57,8 @@ impl fmt::Display for DecodeError {
             Self::TypeMismatch => "CBOR major type does not match the requested type",
             Self::Malformed => "malformed item",
             Self::TrailingBytes => "trailing bytes after top-level item",
+            Self::MissingField => "required field missing",
+            Self::UnknownVariant => "unknown enum variant",
         };
         f.write_str(msg)
     }

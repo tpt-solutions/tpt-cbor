@@ -13,7 +13,10 @@ categories = ["encoding", "no-std", "no-std::no-alloc"]
 
 # The core crate has NO dependencies. Do not add any here; see deny.toml and
 # the zero-dependency CI check.
+# `derive` is opt-in. Enabling it adds the build-time proc-macro crate (and
+# its syn/quote dependencies). The default build stays dependency-free.
 [dependencies]
+tpt-cbor-derive = { version = "0.1.0", path = "../tpt-cbor-derive", optional = true }
 
 [features]
 default = ["alloc"]
@@ -21,6 +24,8 @@ default = ["alloc"]
 alloc = []
 # std::io::{Read, Write} adapters. Implies `alloc`.
 std = ["alloc"]
+# Derive macros for Encode/Decode (pulls in tpt-cbor-derive and syn/quote).
+derive = ["dep:tpt-cbor-derive"]
 
 [dev-dependencies]
 
