@@ -17,16 +17,15 @@ Ecosystem Bridge: Integration with serde or other ecosystems is explicitly exclu
 tpt-cbor implements RFC 8949 but enforces a Strict Canonical Subset for encoding to eliminate ambiguity and simplify the parser:
 Definite Lengths Only: Indefinite-length strings, byte arrays, arrays, and maps are rejected during decoding and never emitted during encoding. This eliminates complex state-machine transitions.
 Minimal Integer Encoding: Integers are always encoded in the minimum number of bytes required (e.g., 1 is encoded as 0x01, not 0x18 0x01).
-Strict Map Ordering: Map keys must be sorted strictly by:
-Length of the encoded key (shorter keys first).
-Lexicographical byte order of the encoded key.
-Float Canonicalization: NaN payloads are normalized to a single canonical quiet NaN. Floats are encoded in the smallest representation that preserves the value (e.g., 1.0 is encoded as a half-precision float, not double).
+Strict Map Ordering: Map keys must be sorted by the bytewise lexicographic order of their encoded form, as specified in RFC 8949 §4.2.1. A key whose encoding is a prefix of another sorts first. Duplicate keys are rejected. (Amended from the earlier length-first rule to match RFC 8949 §4.2.1.)
+Float Canonicalization: NaN payloads are normalized to a single canonical quiet NaN (0xf97e00). Floats are encoded in the smallest representation that preserves the value (e.g., 1.0 is encoded as a half-precision float, not double).
+Unsupported items: Tags, undefined (0xf7), and unassigned simple values are rejected in both strict and lenient mode. Lenient mode only relaxes the canonical-form rules above (minimal integers, float width, map order, duplicate keys). Indefinite lengths are always rejected.
 5. Core API Architecture
 Because we cannot rely on serde, tpt-cbor provides its own lightweight, zero-cost traits.
 5.1. The Encode and Decode Traits
 // Core traits defined in tpt-cbor
 pub trait Encode {
-    fn encode(&self, encoder: &mut Encoder) -> Result<(), EncodeError>;
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), EncodeError>;
 }
 
 pub trait Decode<'a>: Sized {
@@ -38,7 +37,8 @@ The Decoder holds a reference to the input slice and tracks the current offset. 
 pub struct Decoder<'a> {
     input: &'a [u8],
     offset: usize,
-    depth: u8, // Bounded recursion tracker
+    depth: usize, // Bounded recursion tracker (checked against max_depth; see §6)
+    config: Config, // strict (default) or lenient
 }
 
 impl<'a> Decoder<'a> {
@@ -50,13 +50,13 @@ impl<'a> Decoder<'a> {
 }
 
 5.3. Dynamic Value Type
-For schemaless use cases, a lightweight Value enum is provided. It uses alloc::vec::Vec and alloc::string::String only when explicitly requested by the user.
+For schemaless use cases, a lightweight Value enum is provided. It uses alloc::vec::Vec only when explicitly requested by the user (feature alloc). Integers are limited to i64; out-of-range integers, tags, undefined and unassigned simple values are DecodeErrors. Maps are stored as a Vec of pairs. Encoding sorts them and rejects duplicate keys.
 pub enum Value<'a> {
     Integer(i64),
     Bytes(&'a [u8]),
     Text(&'a str),
     Array(Vec<Value<'a>>),
-    Map(Vec<(Value<'a>, Value<'a>)>), // Sorted by canonical rules
+    Map(Vec<(Value<'a>, Value<'a>)>), // Sorted into canonical order on encode; strict decode requires canonical order
     Float(f64),
     Bool(bool),
     Null,
@@ -64,13 +64,13 @@ pub enum Value<'a> {
 
 6. Safety and Verification Strategy
 To ensure the library can be formally verified (e.g., via Kani or future agentic verification tools), the internal architecture is restricted:
-Bounded Recursion: The Decoder enforces a maximum nesting depth (default: 64). If the depth exceeds this, it returns a DepthExceeded error. This guarantees the call stack cannot overflow.
+Bounded Recursion: The Decoder enforces a maximum nesting depth (default: 64, hard ceiling 256 regardless of configuration). If the depth exceeds the limit, it returns a DepthExceeded error. This guarantees the call stack cannot overflow. The encoder enforces the same default limit, so its output is always decodable.
 Checked Arithmetic: All offset additions and length calculations use .checked_add() and .ok_or(DecodeError::Overflow). No unwrap() or expect() is used on arithmetic operations.
 Flat State Machine: Because indefinite-length items are banned, the parser does not need a complex stack to track nested indefinite contexts. The state machine remains flat and highly predictable.
-No Unsafe Code in Core: The initial implementation will be 100% safe Rust. unsafe blocks may only be introduced later in highly specific, isolated SIMD-accelerated paths, strictly guarded by safety invariants.
+No Unsafe Code in Core: The core crate is #![forbid(unsafe_code)] and is 100% safe Rust. No unsafe code is planned for v1.0. Any future SIMD path would be an optional, isolated feature with its own unsafe audit (see todo.md, Later).
 7. Performance Characteristics
-Branchless Integer Parsing: Utilizes bitwise operations and count_ones to parse CBOR major types and additional info without branching.
-SIMD UTF-8 Validation: When the std feature is enabled, string validation leverages architecture-specific SIMD instructions to validate UTF-8 bounds at memory-bandwidth speeds.
+Bitwise Header Parsing: The major type and additional information are extracted with shifts and masks. No branch-free guarantee is claimed; performance claims require benchmarks.
+UTF-8 Validation: Uses core::str::from_utf8. SIMD is not used in v1.0. An optional simd feature is deferred until benchmarks justify it (see todo.md, Later).
 Zero Allocation on Decode: Decoding into statically typed structs requires zero heap allocations, as all string/byte data is borrowed directly from the input buffer.
 8. Implementation Roadmap
 Phase 1: Core Substrate: Implement Encoder, Decoder, Encode, Decode traits, and the Value enum. Enforce strict canonical encoding. (Zero dependencies).

@@ -1,0 +1,33 @@
+# cargo-deny configuration.
+# Policy: permissive licenses only. A dependency is acceptable when at least
+# one permissive license is available to us (e.g. `MIT OR Apache-2.0` is
+# satisfied by MIT), but a dependency that is Apache-2.0 *only* is rejected.
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+# Note: Apache-2.0 is intentionally absent. Dual-licensed `MIT OR Apache-2.0`
+# crates still pass because cargo-deny accepts an OR expression when any
+# alternative is allowed.
+allow = [
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
