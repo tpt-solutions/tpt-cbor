@@ -4,6 +4,10 @@ on:
   push:
     branches: [master]
   pull_request:
+  schedule:
+    # Slow jobs (miri, minimal versions, kani, long fuzz) run weekly.
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         toolchain: [stable, "1.85.0"] # 1.85.0 is the pinned MSRV
-        features: ["", "--features std", "--no-default-features"]
+        features: ["", "--features std", "--no-default-features", "--all-features"]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -46,6 +50,16 @@ jobs:
           toolchain: "1.85.0"
           components: rustfmt
       - run: cargo fmt --all -- --check
+
+  docs:
+    name: Rustdoc (warnings are errors)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo doc --workspace --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
 
   no-std:
     name: no_std build (thumbv7em-none-eabihf)
@@ -84,12 +98,124 @@ jobs:
         with:
           command: check
 
+  deny-fuzz:
+    name: cargo-deny (fuzz harness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-deny --locked
+      - run: cargo deny --manifest-path fuzz/Cargo.toml check
+
+  semver:
+    name: cargo-semver-checks (advisory until first release)
+    runs-on: ubuntu-latest
+    # The first release has no baseline on crates.io, so this cannot pass yet.
+    # Remove continue-on-error once tpt-cbor is published.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-semver-checks --locked
+      - run: cargo semver-checks check-release -p tpt-cbor
+
+  publish-dry-run:
+    name: Publish dry run (no upload)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # `--dry-run` packages and verifies a crate but never uploads it.
+      # Publish order is tpt-cbor-derive, then tpt-cbor, because tpt-cbor
+      # depends on the derive crate. tpt-cbor's dry run therefore needs the
+      # derive crate on crates.io first. Until then, only the derive crate is
+      # checked here. tpt-cbor-cli and tpt-cbor-derive-tests are publish = false.
+      - run: cargo publish --dry-run -p tpt-cbor-derive
+
   fuzz-smoke:
     name: Fuzz smoke (every PR)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo install cargo-fuzz --locked
+      # rust-toolchain.toml pins 1.85.0 for this checkout, which overrides the
+      # nightly installed above; force nightly so cargo-fuzz's deps (rustc 1.86+) build.
+      - run: cargo +nightly install cargo-fuzz --locked
+      - name: Start from the committed seed corpus
+        run: mkdir -p fuzz/corpus/decode && cp fuzz/seeds/decode/* fuzz/corpus/decode/
       - run: cargo +nightly fuzz run decode -- -max_total_time=60
         working-directory: fuzz
+
+  fuzz-long:
+    name: Fuzz long run (weekly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo +nightly install cargo-fuzz --locked
+      - name: Restore corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/decode
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+      - name: Seed the corpus
+        run: mkdir -p fuzz/corpus/decode && cp -n fuzz/seeds/decode/* fuzz/corpus/decode/ || true
+      - run: cargo +nightly fuzz run decode -- -max_total_time=1800
+        working-directory: fuzz
+      - name: Keep any crash for triage
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: fuzz/artifacts/decode
+          if-no-files-found: ignore
+
+  minimal-versions:
+    name: Minimum dependency versions (weekly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo +nightly update -Z minimal-versions
+      - run: cargo +nightly test --workspace --all-features
+
+  miri:
+    name: Miri (weekly, core library tests)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - run: cargo +nightly miri setup
+      - run: cargo +nightly miri test -p tpt-cbor --lib --all-features
+
+  coverage:
+    name: Coverage (report only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - run: cargo install cargo-llvm-cov --locked
+      - run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: lcov.info
+
+  kani:
+    name: Kani proofs (weekly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: model-checking/kani-github-action@v1
+      - run: cargo kani -p tpt-cbor
+

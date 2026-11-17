@@ -16,6 +16,9 @@ confidence-threshold = 0.93
 allow = [
     "MIT",
     "Unicode-3.0",
+    # NCSA is permissive, like MIT. It is needed only by libfuzzer-sys, which
+    # is a development dependency of the fuzz harness and is not shipped.
+    "NCSA",
 ]
 
 [bans]
