@@ -104,7 +104,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo install cargo-deny --locked
+      # rust-toolchain.toml pins 1.85.0 for this checkout, and the newest cargo-deny
+      # needs rustc 1.89; force stable so the install picks a compatible toolchain.
+      - run: cargo +stable install cargo-deny --locked
       - run: cargo deny --manifest-path fuzz/Cargo.toml check
       - run: cargo deny --manifest-path bench/Cargo.toml check
 
