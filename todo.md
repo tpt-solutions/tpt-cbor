@@ -96,7 +96,7 @@ Owner: TPT Solutions · License: MIT OR Apache-2.0 · Policy: zero dependencies 
 
 ## Phase 3 — Formal Verification (Kani, narrowed)
 Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1; Kani only proves what they can't.
-- [ ] Install Kani; add `kani` cfg harness module — harnesses written (`src/proofs.rs`). Also updated for the new `Config::max_items` field. **Blocked**: Kani's installer needs Unix (no native Windows support). The WSL route was denied by the permission check, so it is not installed. Needs a Linux machine/CI runner or an approved WSL install; see VERIFICATION.md
+- [x] Install Kani; add `kani` cfg harness module — installed in WSL (Kani 0.68.0). Nine component harnesses verify in about 40 s. Whole-function `skip_item` is not proved (attempts recorded in VERIFICATION.md)
 - [ ] `cfg(kani)`: shrink max depth to 2–3; stub `core::str::from_utf8` with `kani::any` — depth shrink done in `skip_item_bounded` only; the `from_utf8` stub is **not implemented**
 - [x] Harness: header parse never panics for any bytes — written, not run
 - [x] Harness: argument read + offset/length arithmetic never overflows or reads out of bounds — partly covered (unsigned encoding minimal/round-trip); written, not run
@@ -175,5 +175,5 @@ Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1
 - [x] Docs in `docs/`: cookbook, migration from serde_cbor, no_std and embedded, and comparison. **Not done:** a link from the root README, which has uncommitted edits. The comparison's facts about other crates are from memory, and should be checked before release.
 - [x] Examples: `no_std_embedded`, `canonical_sign` and `hostile_input` in the core crate. CLI usage is in its README.
 - [x] Fuzz seed corpus: `fuzz/seeds/decode` (167 files, generated from the test vectors). CI copies it into the corpus.
-- [ ] Criterion benchmarks against ciborium and minicbor. **Written but not committed.** Both comparison crates break the dependency policy: ciborium is Apache-2.0 only, and minicbor is BlueOak-1.0.0. This needs a policy decision, because the policy has no exception for dev-only tools. Short local run, not committed: tpt-cbor decode about 291 ns, minicbor 297 ns, ciborium 773 ns. tpt-cbor encode about 582 ns, minicbor 470 ns, ciborium 418 ns. Numbers depend on the machine.
+- [x] Criterion benchmarks: `bench/` (criterion only), covering typed and Value encode/decode and validation. Comparisons with ciborium and minicbor are **not included**: both break the dependency policy (ciborium is Apache-2.0 only, minicbor is BlueOak-1.0.0). Adding them needs a policy decision.
 - [ ] Reserve crates.io names. **Not done:** it needs a crates.io account, and publishing is out of scope.
