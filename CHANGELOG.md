@@ -27,10 +27,12 @@ All notable changes to this project are documented here. The format follows [Kee
 - Examples `canonical_sign`, `hostile_input` and `no_std_embedded`, and documentation in `docs/`.
 - Seed corpus for the fuzz harness in `fuzz/seeds/decode`.
 - Community files: `CONTRIBUTING.md` (issues only), `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue forms, dependabot, `rustfmt.toml`, `clippy.toml`, and a manual release-PR workflow with `publish = false`.
+- Kani proof `container_depth_never_exceeds_limit`, bounding container nesting. Ten Kani harnesses now verify, one CI job each, and Miri runs the core integration tests on Linux.
 
 ### Changed
 
 - Decoding checks container length against `Config::max_items` before elements are read.
+- The workspace uses resolver 3, which the 1.85 MSRV supports.
 - `check_key_order` reports `Malformed` for a span outside the input.
 - The derive test suite moved to `tpt-cbor-derive-tests`, so `tpt-cbor-derive` no longer depends on `tpt-cbor`. Publishing order is `tpt-cbor-derive`, then `tpt-cbor`.
 - `value_roundtrip` requires the `alloc` feature.

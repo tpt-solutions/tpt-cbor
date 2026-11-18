@@ -26,6 +26,11 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 - `check_key_order` reports `DecodeError::Malformed` for a span outside the input, not `UnexpectedEof`.
 - Containers reserve at most 1024 slots before decoding elements (`PREALLOC_LIMIT`).
 - Decoding `Value` arrays and maps no longer reserves capacity from the declared length alone.
+- The workspace uses resolver 3, which the 1.85 MSRV supports.
+
+### Verification
+
+- Kani proofs cover header parsing, integer and float encoding, the key-order check, and container depth (`container_depth_never_exceeds_limit`). Proofs are test-only and do not change the public API.
 
 ### Fixed
 
