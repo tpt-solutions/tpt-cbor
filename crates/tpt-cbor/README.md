@@ -110,10 +110,12 @@ for the full format and the container and field attributes (`rename`, `rename_al
 
 ## Verification
 
-Proof harnesses for the integer, float and skip paths are written but have **not been run yet**.
-Kani is not installed in the development environment. See
-[`VERIFICATION.md`](https://github.com/TPT-Solutions/tpt-cbor/blob/master/VERIFICATION.md) for status,
-including the RFC 8949 Appendix A vectors, the fuzz harness and the other checks.
+Ten Kani proof harnesses verify: header parsing, integer and float encoding,
+the key-order check, and the container depth limit. Kani does not prove
+`skip_item` as a whole; its recursion is bounded through the depth proof and
+the unit tests. Miri runs the core integration tests on Linux. See
+[`VERIFICATION.md`](https://github.com/TPT-Solutions/tpt-cbor/blob/master/VERIFICATION.md) for the
+results, the limits, the fuzzing runs and the other checks.
 
 ## Minimum supported Rust version
 
