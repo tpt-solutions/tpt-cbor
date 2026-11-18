@@ -79,7 +79,7 @@ fn random_values_round_trip_to_identical_bytes() {
     .map(|s| s.to_string())
     .collect();
     let mut rng = Rng(0x2545_f491_4f6c_dd1d);
-    for case in 0..5_000 {
+    for case in 0..if cfg!(miri) { 200 } else { 5_000 } {
         let value = gen_value(&mut rng, 0, &pool);
         let bytes = to_vec(&value).unwrap_or_else(|e| panic!("case {case}: encode failed: {e}"));
 
@@ -101,7 +101,7 @@ fn values_without_nan_round_trip_exactly() {
     let pool = vec![String::from("x")];
     let mut rng = Rng(0x0123_4567_89ab_cdef);
     let mut checked = 0;
-    for _ in 0..5_000 {
+    for _ in 0..if cfg!(miri) { 200 } else { 5_000 } {
         let value = gen_value(&mut rng, 0, &pool);
         if contains_nan(&value) {
             continue;
@@ -111,7 +111,10 @@ fn values_without_nan_round_trip_exactly() {
         assert!(values_equal(&decoded, &value), "mismatch for {value:?}");
         checked += 1;
     }
-    assert!(checked > 1_000, "generator produced too few NaN-free cases");
+    assert!(
+        checked > if cfg!(miri) { 20 } else { 1_000 },
+        "generator produced too few NaN-free cases"
+    );
 }
 
 fn contains_nan(v: &Value<'_>) -> bool {

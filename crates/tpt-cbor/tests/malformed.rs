@@ -244,7 +244,7 @@ fn depth_limit_is_enforced() {
     let mut d = Decoder::new(&too_deep);
     assert_eq!(d.skip_item(), Err(DecodeError::DepthExceeded));
     // A pathological input does not overflow the stack.
-    let deep = nested(100_000);
+    let deep = nested(if cfg!(miri) { 2_000 } else { 100_000 });
     assert_eq!(
         from_slice::<Value<'_>>(&deep),
         Err(DecodeError::DepthExceeded)
@@ -293,7 +293,8 @@ fn peek_kind_classifies_without_consuming() {
 fn exhaustive_first_two_bytes_never_panic() {
     for first in 0u16..=255 {
         probe_all(&[first as u8]);
-        for second in 0u16..=255 {
+        // Under Miri, step through the second byte; every major type is still reached.
+        for second in (0u16..=255).step_by(if cfg!(miri) { 17 } else { 1 }) {
             probe_all(&[first as u8, second as u8]);
         }
     }
@@ -331,7 +332,7 @@ fn random_inputs_never_panic() {
         state ^= state << 17;
         state
     };
-    for _ in 0..50_000 {
+    for _ in 0..if cfg!(miri) { 500 } else { 50_000 } {
         let len = (next() % 40) as usize;
         let input: Vec<u8> = (0..len).map(|_| next() as u8).collect();
         probe_all(&input);
@@ -394,9 +395,15 @@ fn large_declared_count_with_real_elements_decodes_fully() {
     // 100k nulls are valid input. Capacity is capped up front (see
     // PREALLOC_LIMIT), so this checks correctness of the growth path; it does
     // not measure allocation.
-    let n: usize = 100_000;
-    let mut bytes = vec![0x9a];
-    bytes.extend_from_slice(&(n as u32).to_be_bytes());
+    let n: usize = if cfg!(miri) { 2_000 } else { 100_000 };
+    // Canonical header: the length uses the shortest width (two bytes for
+    // 2,000 under Miri, four bytes for 100,000 otherwise).
+    let mut bytes = if n <= 0xffff { vec![0x99] } else { vec![0x9a] };
+    if n <= 0xffff {
+        bytes.extend_from_slice(&(n as u16).to_be_bytes());
+    } else {
+        bytes.extend_from_slice(&(n as u32).to_be_bytes());
+    }
     bytes.extend(std::iter::repeat(0xf6).take(n));
     let decoded = from_slice::<Vec<Value<'_>>>(&bytes).expect("valid");
     assert_eq!(decoded.len(), n);
