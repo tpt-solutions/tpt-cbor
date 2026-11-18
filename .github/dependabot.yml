@@ -4,6 +4,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Newer trybuild releases need rustc 1.88. The MSRV is 1.85, so the pin
+      # in crates/tpt-cbor-derive-tests/Cargo.toml must stay. Update it by hand
+      # only when the MSRV moves.
+      - dependency-name: "trybuild"
   - package-ecosystem: cargo
     directory: /fuzz
     schedule:
