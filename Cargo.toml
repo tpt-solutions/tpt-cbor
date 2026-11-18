@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = ["crates/tpt-cbor", "crates/tpt-cbor-derive", "crates/tpt-cbor-cli", "crates/tpt-cbor-derive-tests"]
 
 [workspace.package]
