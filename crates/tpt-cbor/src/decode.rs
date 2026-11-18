@@ -9,6 +9,25 @@ use crate::{DEFAULT_MAX_DEPTH, DEFAULT_MAX_ITEMS, MAX_DEPTH_LIMIT};
 #[cfg(feature = "alloc")]
 use alloc::{string::String, vec::Vec};
 
+/// Validates a text string's bytes as UTF-8.
+#[cfg(not(kani))]
+fn utf8(bytes: &[u8]) -> Result<&str, DecodeError> {
+    core::str::from_utf8(bytes).map_err(|_| DecodeError::InvalidUtf8)
+}
+
+/// Under Kani, UTF-8 validation is modelled as an arbitrary accept or reject.
+/// The validation loop dominates proof time, and the panic and bounds proofs
+/// do not depend on string contents. Real validation is covered by the tests
+/// and the fuzzer.
+#[cfg(kani)]
+fn utf8(_bytes: &[u8]) -> Result<&str, DecodeError> {
+    if kani::any() {
+        Ok("")
+    } else {
+        Err(DecodeError::InvalidUtf8)
+    }
+}
+
 /// Upper bound on the capacity reserved up front for a decoded container.
 ///
 /// The declared length is checked against the remaining input, but one input
@@ -242,7 +261,7 @@ impl<'a> Decoder<'a> {
         let n = self.read_value_of(MAJOR_TEXT)?;
         let len = usize::try_from(n).map_err(|_| DecodeError::UnexpectedEof)?;
         let bytes = self.take(len)?;
-        core::str::from_utf8(bytes).map_err(|_| DecodeError::InvalidUtf8)
+        utf8(bytes)
     }
 
     /// Decodes a boolean.
@@ -456,13 +475,19 @@ impl<'a> Decoder<'a> {
     }
 
     /// Reads `n` bytes as a big-endian unsigned integer (n <= 8).
+    ///
+    /// Only the widths 1, 2, 4 and 8 occur. Each is a fixed-size pattern, so
+    /// there is no loop whose bound depends on the input. That keeps model
+    /// checking cheap, and it is also the fast path for the decoder.
     fn read_be(&mut self, n: usize) -> Result<u64, DecodeError> {
         let bytes = self.take(n)?;
-        let mut value = 0u64;
-        for &b in bytes {
-            value = (value << 8) | u64::from(b);
+        match bytes {
+            [b] => Ok(u64::from(*b)),
+            [a, b] => Ok(u64::from(u16::from_be_bytes([*a, *b]))),
+            [a, b, c, d] => Ok(u64::from(u32::from_be_bytes([*a, *b, *c, *d]))),
+            [a, b, c, d, e, f, g, h] => Ok(u64::from_be_bytes([*a, *b, *c, *d, *e, *f, *g, *h])),
+            _ => Err(DecodeError::Malformed),
         }
-        Ok(value)
     }
 
     /// Reads an initial byte and its argument. Indefinite-length markers are

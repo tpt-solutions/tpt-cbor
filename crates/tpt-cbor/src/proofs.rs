@@ -1,14 +1,22 @@
 //! Kani proof harnesses. Compiled only under `cargo kani`.
 //!
-//! STATUS: written but NOT YET RUN. Kani is not installed in the development
-//! environment. Run with `cargo kani -p tpt-cbor` once it is available, then
-//! record results in VERIFICATION.md.
+//! Each harness covers one piece of the decoder and is kept small. Proofs over
+//! the whole `skip_item` function were tried and did not finish within 20 to 25
+//! minutes on a 4-byte input: CBMC encodes the map key-order code in every
+//! harness that reaches it, and the container loops add to the solver's work.
+//! `skip_item` is therefore not proved as a whole. It is built from the pieces
+//! below: header parsing, integer, string and float readers, container
+//! headers, and key order. Its own recursion is covered by the unit tests and
+//! the fuzzer.
 //!
-//! Scope: these harnesses cover header parsing, bounded skipping, integer and
-//! float encoding round-trips. Vec/String/Value code is left to tests and
-//! fuzzing, as the Phase 3 plan says.
+//! Under Kani, UTF-8 validation is modelled as an arbitrary accept or reject
+//! (see `decode.rs`). The proofs are about panics and bounds, which do not
+//! depend on string contents. The tests and the fuzzer cover real validation.
+//!
+//! The encoder round trips prove algorithmic results. Results are recorded in
+//! VERIFICATION.md.
 
-use crate::{Config, Decoder, Encoder};
+use crate::{Decoder, Encoder};
 
 /// Header parsing never panics for any first byte, and classification is
 /// consistent with the decode path.
@@ -22,20 +30,70 @@ fn header_parse_never_panics() {
     let _ = d.decode_u64();
 }
 
-/// `skip_item` never panics and never reads out of bounds on an 8-byte
-/// symbolic input. Depth is shrunk to 2 so that the unwinding bound is small.
+/// Integer arguments of every width (1, 2, 4 and 8 bytes after the head) never
+/// panic or read out of bounds, for both the unsigned and signed readers.
 #[kani::proof]
 #[kani::unwind(10)]
-fn skip_item_bounded() {
-    let input: [u8; 8] = kani::any();
-    let config = Config {
-        strict: true,
-        max_depth: 2,
-        max_items: crate::DEFAULT_MAX_ITEMS,
-    };
-    let mut d = Decoder::with_config(&input, config);
-    let _ = d.skip_item();
+fn integer_arguments_never_panic() {
+    let input: [u8; 9] = kani::any();
+    let mut d = Decoder::new(&input);
+    let _ = d.decode_u64();
     assert!(d.position() <= input.len());
+    let mut d = Decoder::new(&input);
+    let _ = d.decode_i64();
+    assert!(d.position() <= input.len());
+}
+
+/// Byte and text string readers never panic or read out of bounds. The text
+/// reader's UTF-8 check is modelled (see the module comment).
+#[kani::proof]
+#[kani::unwind(10)]
+fn string_decode_never_panics() {
+    let input: [u8; 9] = kani::any();
+    let mut d = Decoder::new(&input);
+    let _ = d.decode_str();
+    assert!(d.position() <= input.len());
+    let mut d = Decoder::new(&input);
+    let _ = d.decode_bytes();
+    assert!(d.position() <= input.len());
+}
+
+/// The float reader never panics for any half, single or double encoding.
+#[kani::proof]
+#[kani::unwind(10)]
+fn float_decode_never_panics() {
+    let input: [u8; 9] = kani::any();
+    let mut d = Decoder::new(&input);
+    let _ = d.decode_f64();
+    assert!(d.position() <= input.len());
+}
+
+/// The container header readers never panic or read out of bounds. A declared
+/// length is checked against the remaining input before any element is read.
+#[kani::proof]
+#[kani::unwind(10)]
+fn container_headers_never_panic() {
+    let input: [u8; 9] = kani::any();
+    let mut d = Decoder::new(&input);
+    let _ = d.decode_array_len();
+    assert!(d.position() <= input.len());
+    let mut d = Decoder::new(&input);
+    let _ = d.decode_map_len();
+    assert!(d.position() <= input.len());
+}
+
+/// The map key-order check never panics, whatever the spans. A span outside
+/// the input is reported as an error rather than indexing out of bounds.
+#[kani::proof]
+#[kani::unwind(10)]
+fn check_key_order_never_panics() {
+    let input: [u8; 8] = kani::any();
+    let d = Decoder::new(&input);
+    let prev_start: usize = kani::any();
+    let prev_end: usize = kani::any();
+    let cur_start: usize = kani::any();
+    let cur_end: usize = kani::any();
+    let _ = d.check_key_order(Some((prev_start, prev_end)), (cur_start, cur_end));
 }
 
 /// Integer encoding is minimal for every width boundary, and it round-trips.
