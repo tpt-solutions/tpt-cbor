@@ -99,13 +99,23 @@ jobs:
           command: check
 
   deny-fuzz:
-    name: cargo-deny (fuzz harness)
+    name: cargo-deny (fuzz harness and benchmarks)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo install cargo-deny --locked
       - run: cargo deny --manifest-path fuzz/Cargo.toml check
+      - run: cargo deny --manifest-path bench/Cargo.toml check
+
+  bench-build:
+    name: Benchmarks compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo bench --no-run
+        working-directory: bench
 
   semver:
     name: cargo-semver-checks (advisory until first release)
@@ -184,16 +194,22 @@ jobs:
       - run: cargo +nightly test --workspace --all-features
 
   miri:
-    name: Miri (weekly, core library tests)
+    # Miri is slow, so it runs weekly and on demand. It covers the core crate's
+    # integration tests. The heavy loops scale down under cfg(miri) (see
+    # tests/malformed.rs and tests/roundtrip.rs). The derive and CLI tests are
+    # excluded: they spawn processes and use the file system, which Miri does
+    # not support.
+    name: Miri (weekly, core integration tests)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          components: miri
+          components: miri, rust-src
       - run: cargo +nightly miri setup
-      - run: cargo +nightly miri test -p tpt-cbor --lib --all-features
+      - run: cargo +nightly miri test -p tpt-cbor --all-features --tests
 
   coverage:
     name: Coverage (report only)
@@ -211,11 +227,28 @@ jobs:
           path: lcov.info
 
   kani:
-    name: Kani proofs (weekly)
+    # One job per proof harness, so a failure names its harness and the jobs
+    # run in parallel. Each harness takes seconds to a few minutes on a runner.
+    # Weekly and on demand only. Harness list: crates/tpt-cbor/src/proofs.rs.
+    # The whole skip_item function is not proved (see the module comment there).
+    name: Kani (${{ matrix.harness }})
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        harness:
+          - header_parse_never_panics
+          - integer_arguments_never_panic
+          - string_decode_never_panics
+          - float_decode_never_panics
+          - container_headers_never_panic
+          - check_key_order_never_panics
+          - unsigned_encoding_minimal_and_round_trips
+          - signed_round_trips
+          - float_canonical_round_trip
     steps:
       - uses: actions/checkout@v7
       - uses: model-checking/kani-github-action@v1
-      - run: cargo kani -p tpt-cbor
-
+      - run: cargo kani -p tpt-cbor --harness proofs::${{ matrix.harness }}
