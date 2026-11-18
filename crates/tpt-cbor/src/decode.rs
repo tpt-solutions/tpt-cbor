@@ -412,6 +412,12 @@ impl<'a> Decoder<'a> {
         self.depth = self.depth.saturating_sub(1);
     }
 
+    /// Current container nesting depth. Visible to the Kani proofs only.
+    #[cfg(kani)]
+    pub(crate) fn depth(&self) -> usize {
+        self.depth
+    }
+
     /// Checks that a map key follows the previous key in canonical order.
     ///
     /// `prev` and `cur` are byte spans of the two encoded keys in the input,

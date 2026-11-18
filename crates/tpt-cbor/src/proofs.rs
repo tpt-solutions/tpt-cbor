@@ -16,7 +16,7 @@
 //! The encoder round trips prove algorithmic results. Results are recorded in
 //! VERIFICATION.md.
 
-use crate::{Decoder, Encoder};
+use crate::{Config, DecodeError, Decoder, Encoder};
 
 /// Header parsing never panics for any first byte, and classification is
 /// consistent with the decode path.
@@ -94,6 +94,43 @@ fn check_key_order_never_panics() {
     let cur_start: usize = kani::any();
     let cur_end: usize = kani::any();
     let _ = d.check_key_order(Some((prev_start, prev_end)), (cur_start, cur_end));
+}
+
+/// Container nesting never exceeds the configured limit, for any sequence of
+/// entries and exits. A refused entry is reported as `DepthExceeded` and leaves
+/// the depth unchanged. `skip_item` recurses only through these calls, so this
+/// bounds its recursion depth.
+#[kani::proof]
+#[kani::unwind(10)]
+fn container_depth_never_exceeds_limit() {
+    let limit: usize = kani::any();
+    kani::assume(limit <= 4);
+    let input = [0u8; 1];
+    let mut d = Decoder::with_config(
+        &input,
+        Config {
+            strict: true,
+            max_depth: limit,
+            max_items: 1024,
+        },
+    );
+    for _ in 0..8 {
+        let before = d.depth();
+        if kani::any() {
+            match d.enter_container() {
+                Ok(()) => assert!(d.depth() == before + 1 && d.depth() <= limit),
+                Err(e) => {
+                    assert!(e == DecodeError::DepthExceeded);
+                    assert!(before == limit);
+                    assert!(d.depth() == before);
+                }
+            }
+        } else {
+            d.leave_container();
+            assert!(d.depth() <= before);
+        }
+        assert!(d.depth() <= limit);
+    }
 }
 
 /// Integer encoding is minimal for every width boundary, and it round-trips.

@@ -128,7 +128,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo install cargo-semver-checks --locked
+      # rust-toolchain.toml pins 1.85.0 for this checkout, and the newest cargo-semver-checks
+      # needs rustc 1.93; force stable so the install picks a compatible toolchain.
+      - run: cargo +stable install cargo-semver-checks --locked
       - run: cargo semver-checks check-release -p tpt-cbor
 
   publish-dry-run:
@@ -250,6 +252,7 @@ jobs:
           - unsigned_encoding_minimal_and_round_trips
           - signed_round_trips
           - float_canonical_round_trip
+          - container_depth_never_exceeds_limit
     steps:
       - uses: actions/checkout@v7
       - uses: model-checking/kani-github-action@v1

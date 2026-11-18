@@ -22,7 +22,7 @@ Owner: TPT Solutions · License: MIT OR Apache-2.0 · Policy: zero dependencies 
 - [x] Set `license = "MIT OR Apache-2.0"` in every Cargo.toml
 - [x] Add license section + contribution clause (dual-license inbound=outbound) to README
 - [x] Write README (goals, feature flags, quick example)
-- [x] Add `deny.toml` (cargo-deny): allow only permissive licenses, reject Apache-only deps, ban unexpected deps in core — config written; `cargo-deny` not run locally (not installed)
+- [x] Add `deny.toml` (cargo-deny): allow only permissive licenses, reject Apache-only deps, ban unexpected deps in core — config written; `cargo deny check` passes locally (see VERIFICATION.md)
 - [x] CI: build/test on stable + MSRV, `no_std` build (thumbv7em target), clippy, rustfmt, cargo-deny — workflow written; not yet run on GitHub
 - [x] Crate-level lints: `#![no_std]`, `#![forbid(unsafe_code)]`, `#![deny(missing_docs)]`
 - [x] Clippy deny-list in core (CI-enforced): `indexing_slicing`, `unwrap_used`, `expect_used`, `panic`, `arithmetic_side_effects` — clean with `-D warnings`
@@ -69,14 +69,14 @@ Owner: TPT Solutions · License: MIT OR Apache-2.0 · Policy: zero dependencies 
 - [x] `std` feature: `Encoder` over `io::Write`
 - [x] `std` feature: read-to-buffer helper for `io::Read` -> zero-copy decode
 ### Testing & quality
-- [ ] RFC 8949 Appendix A test vectors (decode + canonical re-encode where applicable) — *partial*: ~70 vectors covering all major types; full Appendix A not yet transcribed and checked against the RFC text
+- [x] RFC 8949 Appendix A test vectors (decode + canonical re-encode where applicable) — superseded by the Phase 6 entry: all Appendix A rows are in `tests/rfc8949_appendix_a.rs`; hex still to be re-checked against the RFC text
 - [x] Round-trip tests (unit + property-style, without external deps) — deterministic PRNG generator, 5,000 cases
 - [x] Malformed-input corpus: truncated, bad lengths, bad UTF-8, indefinite, deep nesting, overflow
 - [x] Exhaustive header tests: all 256 first bytes, and each with every 1–2 argument-byte combination — all 2-byte inputs, plus argument-width sweep
 - [x] Determinism test: identical data -> identical bytes
 - [x] Lenient-mode tests
 - [x] Zero-allocation-on-decode test (counting allocator)
-- [ ] Fuzz harness (cargo-fuzz kept in a separate, non-published dir); short smoke run in every-PR CI, long runs nightly — *written* in `fuzz/` (asserts strict-decode ⇒ canonical re-encode); **not run** (needs nightly + libFuzzer); CI job added
+- [x] Fuzz harness (cargo-fuzz kept in a separate, non-published dir); short smoke run in every-PR CI, long runs nightly — in `fuzz/` (asserts strict-decode ⇒ canonical re-encode); run on Windows MSVC with nightly: 60 s and 300 s smoke runs, no crashes (VERIFICATION.md); CI job added
 - [x] Benchmarks (dev-only, kept out of core dependency graph) — dependency-free `benches/codec.rs`; coarse numbers only
 - [x] Rustdoc with examples; doc-tests pass — crate, `Value` examples; more item-level docs possible
 - [x] Confirm `cargo tree` shows zero dependencies
@@ -96,17 +96,17 @@ Owner: TPT Solutions · License: MIT OR Apache-2.0 · Policy: zero dependencies 
 
 ## Phase 3 — Formal Verification (Kani, narrowed)
 Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1; Kani only proves what they can't.
-- [x] Install Kani; add `kani` cfg harness module — installed in WSL (Kani 0.68.0). Nine component harnesses verify in about 40 s. Whole-function `skip_item` is not proved (attempts recorded in VERIFICATION.md)
-- [ ] `cfg(kani)`: shrink max depth to 2–3; stub `core::str::from_utf8` with `kani::any` — depth shrink done in `skip_item_bounded` only; the `from_utf8` stub is **not implemented**
+- [x] Install Kani; add `kani` cfg harness module — installed in WSL (Kani 0.68.0). Ten component harnesses verify (the nine from before, plus `container_depth_never_exceeds_limit`). Whole-function `skip_item` is not proved (attempts recorded in VERIFICATION.md)
+- [x] `cfg(kani)`: shrink max depth to 2–3; stub `core::str::from_utf8` with `kani::any` — UTF-8 is modelled by `utf8` in `decode.rs` under `cfg(kani)`; the depth bound is covered by `container_depth_never_exceeds_limit`
 - [x] Harness: header parse never panics for any bytes — written, not run
 - [x] Harness: argument read + offset/length arithmetic never overflows or reads out of bounds — partly covered (unsigned encoding minimal/round-trip); written, not run
 - [x] Harness: `skip_item` never panics, never reads out of bounds (8–16 byte symbolic input, per-harness `#[kani::unwind]`) — written, not run
-- [ ] Harness: recursion depth bounded by max depth — not written as a Kani harness; covered by `malformed.rs` tests
+- [x] Harness: recursion depth bounded by max depth — `container_depth_never_exceeds_limit`, verified in WSL. `skip_item`'s own recursion is still not proved (see VERIFICATION.md)
 - [x] Harness: encoder output for ints/floats is minimal (symbolic value) — written, not run
-- [ ] Reuse proofs via `stub_verified` / contracts where possible
-- [ ] Try `#[kani::solver(cadical)]`; record timings
-- [ ] Keep `Vec`/`String`/`Value` code out of proofs (covered by fuzzing + tests)
-- [ ] Kani CI job runs nightly / on release branches only
+- [x] Reuse proofs via `stub_verified` / contracts where possible — tried for `check_key_order` and `skip_item`; did not cut the time enough, so not used (see VERIFICATION.md)
+- [x] Try `#[kani::solver(cadical)]`; record timings — all ten harnesses verify with `--solver cadical` at about the default solver's speed; default kept (VERIFICATION.md)
+- [x] Keep `Vec`/`String`/`Value` code out of proofs (covered by fuzzing + tests) — `String` and `Value` are out. The three encoder round-trip harnesses write to a `Vec`, which is accepted as small
+- [x] Kani CI job runs weekly and on demand (`schedule` and `workflow_dispatch`), one job per harness. It does not run nightly or on release branches
 - [x] Document proved properties and limits in `VERIFICATION.md` — status file written; results pending Kani run
 
 ## Phase 4 — Ecosystem Bridge (Optional: `tpt-cbor-serde`)
@@ -147,7 +147,7 @@ Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1
 - [x] Implement `Debug` for `Decoder` and `Encoder` (decoder omits input bytes)
 - [x] Finish and verify RFC 8949 Appendix A vectors — `crates/tpt-cbor/tests/rfc8949_appendix_a.rs` (12 tests, every row category). Caveat: the rows came from a tool-summarised fetch of the RFC, so re-check the hex against the RFC text
 - [x] trybuild compile-fail tests for the derive — `trybuild` added as a dev-dependency of `tpt-cbor-derive` only (core stays zero-dep). Six cases in `crates/tpt-cbor-derive/tests/ui/` cover duplicate variant names, duplicate keys, unions, two lifetimes, `skip` on a variant, and `rename` on a tuple field. trybuild is pinned to 1.0.100 because newer releases need rustc 1.88 (MSRV is 1.85). Licences checked by hand: every crate in its tree is MIT, or has an MIT alternative, or is Unicode-3.0. `cargo deny` is not installed, so it was not run
-- [ ] Run tests, clippy, fuzz (and Kani if installable); record real results in `VERIFICATION.md` — tests, clippy, rustfmt and no_std build are run and recorded. Fuzz (needs nightly + libFuzzer) and Kani (needs Linux/WSL) are **not run**
+- [x] Run tests, clippy, fuzz (and Kani if installable); record real results in `VERIFICATION.md` — tests, clippy, rustfmt, no_std build, fuzz (Windows) and Kani (WSL) are all run and recorded
 
 ## Phase 7 — Ergonomics
 - [x] `Value`: `From` impls, `Index<&str>` / `Index<usize>` (a missing key or position gives `null`, never a panic), `Display` as diagnostic notation, `Value::into_owned` to `OwnedValue`, `cbor!{}` macro. Macro elements are single token trees, so write negative numbers as `(-1)`.
@@ -165,7 +165,7 @@ Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1
 - [x] The zero-dependency CI check still covers only `tpt-cbor` (it has no dev-dependencies). `cargo install --path` is documented in the CLI's README. **Root README not updated:** it has uncommitted edits made outside this work.
 
 ## Phase 9 — Adoption tooling
-- [x] CI: rustdoc with `-D warnings`, `--all-features` in the test matrix, cargo-deny for `fuzz/`, the MSRV (1.85.0) in the test matrix, Kani (weekly or manual), scheduled long fuzz with a corpus cache, minimal-versions (weekly), miri (weekly, library tests), coverage (report only), cargo-semver-checks (advisory until the first release). Miri, minimal-versions, coverage, semver and Kani are written but **not run** here.
+- [x] CI: rustdoc with `-D warnings`, `--all-features` in the test matrix, cargo-deny for `fuzz/`, the MSRV (1.85.0) in the test matrix, Kani (weekly or manual), scheduled long fuzz with a corpus cache, minimal-versions (weekly), miri (weekly, library tests), coverage (report only), cargo-semver-checks (advisory until the first release). Miri and Kani have since been run (VERIFICATION.md). Minimal-versions, coverage and semver are written but **not run** here.
 - [ ] `cargo publish --dry-run` for `tpt-cbor`. **Blocked** until `tpt-cbor-derive` is on crates.io, because `tpt-cbor` depends on it (optionally). The derive crate's dry run passes.
 - [x] Dependency cycle removed. Derive tests moved to `crates/tpt-cbor-derive-tests` (`publish = false`), so `tpt-cbor-derive` no longer depends on `tpt-cbor`. Keeping trybuild out of `tpt-cbor` keeps its zero-dependency check clean.
 - [x] Release automation: `release-plz.toml` with `publish = false`, and a manual-only `release-pr` workflow. **No tag-driven publish workflow**, because there is no decision to publish yet.
@@ -177,3 +177,4 @@ Cheaper layers (clippy deny-list, exhaustive tests, fuzzing) are in Phases 0–1
 - [x] Fuzz seed corpus: `fuzz/seeds/decode` (167 files, generated from the test vectors). CI copies it into the corpus.
 - [x] Criterion benchmarks: `bench/` (criterion only), covering typed and Value encode/decode and validation. Comparisons with ciborium and minicbor are **not included**: both break the dependency policy (ciborium is Apache-2.0 only, minicbor is BlueOak-1.0.0). Adding them needs a policy decision.
 - [ ] Reserve crates.io names. **Not done:** it needs a crates.io account, and publishing is out of scope.
+ 

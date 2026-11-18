@@ -1,6 +1,6 @@
 # Verification status
 
-Status: **Kani: all nine component harnesses verified.** **Miri: the core
+Status: **Kani: all ten component harnesses verified.** **Miri: the core
 integration tests pass on Linux.** Other checks were run on Windows with the
 pinned toolchain, Rust 1.85.0, unless the row says otherwise.
 
@@ -24,6 +24,11 @@ on Ubuntu, one job each.
 | `unsigned_encoding_minimal_and_round_trips` | Unsigned integer encoding is minimal and round-trips for all `u64` | verified | 7 s |
 | `signed_round_trips` | Signed integer encoding round-trips for all `i64` | verified | 10 s |
 | `float_canonical_round_trip` | Strict decode and re-encode of any non-NaN `f64` gives identical bytes | verified | 11 s |
+| `container_depth_never_exceeds_limit` | Container nesting never exceeds the configured limit for any sequence of entries and exits; a refused entry leaves the depth unchanged. Bounds `skip_item`'s recursion | verified | 1 s |
+
+The solver was also tried: `cargo kani --solver cadical` on all ten harnesses
+verified every one, in 0–11 s each, close to the default solver's times. The
+default solver is kept.
 
 ### Not proved: `skip_item` as a whole
 
@@ -59,7 +64,7 @@ Its own recursion is covered by the unit tests (`depth_limit_is_enforced`,
   Each runs in seconds, so CI runs them in parallel.
 
 Before these changes, the five original harnesses took 7–14 s each for the round
-trips, and `skip_item_bounded` did not finish within 25 minutes. The nine
+trips, and `skip_item_bounded` did not finish within 25 minutes. The ten
 harnesses above take about 40 s together in total.
 
 ## Miri (undefined behaviour)
